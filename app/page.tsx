@@ -25,9 +25,9 @@ export default function InvoiceGenerator() {
     bankAccount: "ES46 2100 3211 0422 0040 1276",
     address:
       "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 409,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
-    clientName: "Aqui pon nombres",
-    clientId: "Aqui pon CI",
-    clientAddress: "Aqui pon cuenta bancaria",
+    clientName: "Darwin Alejandro Elégiga López",
+    clientId: "02100682665",
+    clientAddress: "Calle Martí # 162, Palma Soriano, Santiago de Cuba, Cuba",
     invoiceNumber: getCurrentMonthInvoiceNumber(),
     date: getLastDayOfMonth(),
   })
