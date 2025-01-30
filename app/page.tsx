@@ -24,10 +24,10 @@ export default function InvoiceGenerator() {
     nif: "B72652290",
     bankAccount: "ES46 2100 3211 0422 0040 1276",
     address:
-      "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 415,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
-    clientName: "Darwin Alejandro Elégiga López",
-    clientId: "02100682665",
-    clientAddress: "Calle Martí # 162, Palma Soriano, Santiago de Cuba, Cuba",
+      "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 409,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
+    clientName: "Aqui pon nombres",
+    clientId: "Aqui pon CI",
+    clientAddress: "Aqui pon cuenta bancaria",
     invoiceNumber: getCurrentMonthInvoiceNumber(),
     date: getLastDayOfMonth(),
   })
@@ -90,7 +90,7 @@ export default function InvoiceGenerator() {
     const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width
 
     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
-    pdf.save("invoice.pdf")
+    pdf.save("Darwin Elé.pdf")
   }
 
   return (
