@@ -2,6 +2,7 @@ export function getCurrentMonthInvoiceNumber(): string {
   const date = new Date()
   const month = date.getMonth() + 1 // JavaScript months are 0-based
   const year = date.getFullYear()
+  const x= 0;
   return `${month}-${year}`
 }
 
