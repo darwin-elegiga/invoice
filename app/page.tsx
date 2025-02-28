@@ -15,10 +15,11 @@ interface InvoiceItem {
   units: string
   price?: string
   total: string
+  client: string
 }
 
 export default function InvoiceGenerator() {
-  const [items, setItems] = useState<InvoiceItem[]>([{ description: "", units: "", price: "", total: "" }])
+  const [items, setItems] = useState<InvoiceItem[]>([{ description: "", units: "", price: "", total: "", client: "" }])
   const [editableText, setEditableText] = useState({
     companyName: "LYN Soluciones Tecnológicas S.L",
     nif: "B72652290",
@@ -52,7 +53,7 @@ export default function InvoiceGenerator() {
   }
 
   const addItem = () => {
-    setItems([...items, { description: "", units: "", price: "", total: "" }])
+    setItems([...items, { description: "", units: "", price: "", total: "", client: "" }])
   }
 
   const removeItem = (index: number) => {
@@ -90,7 +91,7 @@ export default function InvoiceGenerator() {
     const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width
 
     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
-    pdf.save("Darwin Elé.pdf")
+    pdf.save(`FACTURA ${getCurrentMonthInvoiceNumber()} Darwin Alejandro.pdf`)
   }
 
   return (
@@ -132,6 +133,14 @@ export default function InvoiceGenerator() {
                     id={`total-${index}`}
                     value={item.total}
                     onChange={(e) => handleItemChange(index, "total", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor={`client-${index}`}>Cliente</Label>
+                  <Input
+                    id={`client-${index}`}
+                    value={item.client}
+                    onChange={(e) => handleItemChange(index, "client", e.target.value)}
                   />
                 </div>
                 {index > 0 && (

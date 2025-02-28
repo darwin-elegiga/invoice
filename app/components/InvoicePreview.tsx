@@ -1,5 +1,3 @@
-import { Input } from "@/components/ui/input"
-
 interface EditableTextProps {
   companyName: string
   nif: string
@@ -17,6 +15,7 @@ interface InvoiceItem {
   units: string
   price?: string
   total: string
+  client: string
 }
 
 interface InvoicePreviewProps {
@@ -27,6 +26,9 @@ interface InvoicePreviewProps {
 }
 
 export function InvoicePreview({ items, total, editableText, onEditableTextChange }: InvoicePreviewProps) {
+  // Verificar si al menos un ítem tiene precio
+  const hasPrices = items.some((item) => item.price && item.price.trim() !== "")
+
   return (
     <div id="invoice-preview" className="bg-white w-[210mm] min-h-[297mm] p-[20mm] mx-auto">
       <div className="flex flex-col min-h-full">
@@ -69,8 +71,9 @@ export function InvoicePreview({ items, total, editableText, onEditableTextChang
             <thead>
               <tr className="border-b border-black">
                 <th className="text-left py-2 font-normal">Descripción</th>
+                <th className="text-left py-2 font-normal">Cliente</th>
                 <th className="text-left py-2 font-normal">Unidades</th>
-                <th className="text-left py-2 font-normal">Precio x h</th>
+                {hasPrices && <th className="text-left py-2 font-normal">Precio x h</th>}
                 <th className="text-right py-2 font-normal">Total</th>
               </tr>
             </thead>
@@ -78,9 +81,10 @@ export function InvoicePreview({ items, total, editableText, onEditableTextChang
               {items.map((item, index) => (
                 <tr key={index}>
                   <td className="py-2">{item.description}</td>
+                  <td className="py-2">{item.client}</td>
                   <td className="py-2">{item.units}</td>
-                  <td className="py-2">{item.price ? `${item.price} EUR` : ""}</td>
-                  <td className="text-right py-2">{item.total} EUR</td>
+                  {hasPrices && <td className="py-2">{item.price ? `${item.price} EUR` : ""}</td>}
+                  <td className="text-right py-2">{item.total ? `${item.total} EUR` : ""}</td>
                 </tr>
               ))}
             </tbody>
@@ -98,7 +102,7 @@ export function InvoicePreview({ items, total, editableText, onEditableTextChang
 
           {/* Total */}
           <div className="text-right">
-            <p className="font-normal">TOTAL: {total} EUR</p>
+            <p className="font-normal">TOTAL: {total ? `${total} EUR` : ""}</p>
           </div>
         </div>
       </div>

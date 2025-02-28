@@ -8,6 +8,7 @@ interface InvoiceItem {
   units: string
   price?: string
   total: string
+  client: string
 }
 
 interface EditableTextProps {
@@ -88,6 +89,14 @@ export function InvoiceForm({
                 id={`total-${index}`}
                 value={item.total}
                 onChange={(e) => onItemChange(index, "total", e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor={`client-${index}`}>Cliente</Label>
+              <Input
+                id={`client-${index}`}
+                value={item.client}
+                onChange={(e) => onItemChange(index, "client", e.target.value)}
               />
             </div>
             {index > 0 && (
