@@ -251,7 +251,7 @@ const exportToPDFLightweight = () => {
   // Total
   pdf.setFontSize(12)
   pdf.text(`TOTAL: ${calculateTotal()} EUR`, pageWidth - margin, yPos, { align: 'right' })
-// 
+// s
   pdf.save(`FACTURA ${getCurrentMonthInvoiceNumber()} Darwin Alejandro.pdf`)
 }
 
