@@ -9,6 +9,8 @@ import { jsPDF } from "jspdf"
 import { PlusCircle } from "lucide-react"
 import { getCurrentMonthInvoiceNumber, getLastDayOfMonth } from "./utils/date-utils"
 import html2canvas from "html2canvas"
+import { Checkbox } from "@/components/ui/checkbox"
+
 
 interface InvoiceItem {
   description: string
@@ -20,6 +22,7 @@ interface InvoiceItem {
 
 export default function InvoiceGenerator() {
   const [items, setItems] = useState<InvoiceItem[]>([{ description: "", units: "", price: "", total: "", client: "" }])
+  const [useImprovedLayout, setUseImprovedLayout] = useState(false)
   const [editableText, setEditableText] = useState({
     companyName: "LYN Soluciones Tecnológicas S.L",
     nif: "B72652290",
@@ -34,7 +37,6 @@ export default function InvoiceGenerator() {
   })
 
   useEffect(() => {
-    // Update invoice number and date at the start of each month
     setEditableText((prev) => ({
       ...prev,
       invoiceNumber: getCurrentMonthInvoiceNumber(),
@@ -69,30 +71,189 @@ export default function InvoiceGenerator() {
       .toFixed(2)
   }
 
-  const exportToPDF = async () => {
-    const content = document.getElementById("invoice-preview")
-    if (!content) return
+const exportToPDF = async () => {
+  const content = document.getElementById("invoice-preview")
+  if (!content) return
 
-    const canvas = await html2canvas(content, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-    })
+  const canvas = await html2canvas(content, {
+    scale: 1.5, // Reducido de 2 a 1.5 para menor peso
+    useCORS: true,
+    logging: false,
+    backgroundColor: '#ffffff', // Fondo blanco explícito
+    removeContainer: true, // Mejora la renderización
+    allowTaint: false,
+    foreignObjectRendering: false, // Mejora compatibilidad
+  })
 
-    const imgData = canvas.toDataURL("image/png")
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
-    })
+  const imgData = canvas.toDataURL("image/jpeg", 0.85) // JPEG con 85% calidad en lugar de PNG
+  const pdf = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+    compress: true, // Activar compresión del PDF
+  })
 
-    const imgProps = pdf.getImageProperties(imgData)
-    const pdfWidth = pdf.internal.pageSize.getWidth()
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width
+  const imgProps = pdf.getImageProperties(imgData)
+  const pdfWidth = pdf.internal.pageSize.getWidth()
+  const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width
 
-    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
-    pdf.save(`FACTURA ${getCurrentMonthInvoiceNumber()} Darwin Alejandro.pdf`)
+  // Si la imagen es muy alta, ajustar para que quepa en una página
+  const maxHeight = pdf.internal.pageSize.getHeight()
+  if (pdfHeight > maxHeight) {
+    const ratio = maxHeight / pdfHeight
+    const adjustedWidth = pdfWidth * ratio
+    const adjustedHeight = maxHeight
+    const xOffset = (pdfWidth - adjustedWidth) / 2
+    pdf.addImage(imgData, "JPEG", xOffset, 0, adjustedWidth, adjustedHeight)
+  } else {
+    pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight)
   }
+  
+  pdf.save(`FACTURA ${getCurrentMonthInvoiceNumber()} Darwin Alejandro.pdf`)
+}
+
+// Alternativa más ligera usando solo jsPDF (sin html2canvas):
+// Si quieres una alternativa que genere PDFs aún más ligeros,
+// aquí tienes una función que crea el PDF directamente:
+
+const exportToPDFLightweight = () => {
+  const pdf = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+    compress: true,
+  })
+
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  const margin = 20
+  let yPos = margin
+
+  // Configurar fuente
+  pdf.setFont("helvetica", "normal")
+
+  // Header - Factura y Fecha
+  pdf.setFontSize(12)
+  pdf.text(`Factura: ${editableText.invoiceNumber}`, pageWidth - margin, yPos, { align: 'right' })
+  yPos += 7
+  pdf.text(`Fecha: ${editableText.date}`, pageWidth - margin, yPos, { align: 'right' })
+  yPos += 20
+
+  // Información de la empresa
+  pdf.setFontSize(11)
+  pdf.text(editableText.companyName, pageWidth - margin, yPos, { align: 'right' })
+  yPos += 7
+  pdf.text(`NIF: ${editableText.nif}`, pageWidth - margin, yPos, { align: 'right' })
+  yPos += 7
+  
+  const addressLines = editableText.address.split('\n')
+  addressLines.forEach(line => {
+    pdf.text(line, pageWidth - margin, yPos, { align: 'right' })
+    yPos += 5
+  })
+  yPos += 15
+
+  // Información del cliente
+  pdf.setFontSize(11)
+  pdf.text(editableText.clientName, margin, yPos)
+  yPos += 7
+  pdf.text(editableText.clientId, margin, yPos)
+  yPos += 7
+  
+  const clientAddressLines = editableText.clientAddress.split('\n')
+  clientAddressLines.forEach(line => {
+    pdf.text(line, margin, yPos)
+    yPos += 5
+  })
+  yPos += 20
+
+  // Tabla de items
+  const tableStartY = yPos
+  const hasPrices = items.some((item) => item.price && item.price.trim() !== "")
+  
+  if (useImprovedLayout) {
+    // Layout mejorado - Proyectos
+    pdf.setFontSize(10)
+    pdf.text("Descripción", margin, yPos)
+    pdf.text("Cliente", margin + 100, yPos)
+    yPos += 7
+    
+    // Línea de separación
+    pdf.line(margin, yPos, pageWidth - margin, yPos)
+    yPos += 7
+
+    items.forEach(item => {
+      pdf.text(item.description, margin, yPos)
+      pdf.text(item.client, margin + 100, yPos)
+      yPos += 7
+    })
+
+    yPos += 10
+    pdf.line(margin, yPos, pageWidth - margin, yPos)
+    yPos += 15
+
+    // Resumen de pagos
+    const tableX = pageWidth - margin - 80
+    pdf.text("Unidades", tableX, yPos)
+    if (hasPrices) pdf.text("Precio x h", tableX + 25, yPos)
+    pdf.text("Total", tableX + 55, yPos)
+    yPos += 7
+    
+    pdf.line(tableX, yPos, pageWidth - margin, yPos)
+    yPos += 7
+
+    items.forEach(item => {
+      pdf.text(item.units, tableX, yPos)
+      if (hasPrices) pdf.text(item.price ? `${item.price} EUR` : "", tableX + 25, yPos)
+      pdf.text(item.total ? `${item.total} EUR` : "", tableX + 55, yPos)
+      yPos += 7
+    })
+  } else {
+    // Layout original
+    pdf.setFontSize(10)
+    pdf.text("Descripción", margin, yPos)
+    pdf.text("Cliente", margin + 50, yPos)
+    pdf.text("Unidades", margin + 90, yPos)
+    if (hasPrices) pdf.text("Precio x h", margin + 120, yPos)
+    pdf.text("Total", pageWidth - margin - 30, yPos)
+    yPos += 7
+    
+    pdf.line(margin, yPos, pageWidth - margin, yPos)
+    yPos += 7
+
+    items.forEach(item => {
+      pdf.text(item.description, margin, yPos)
+      pdf.text(item.client, margin + 50, yPos)
+      pdf.text(item.units, margin + 90, yPos)
+      if (hasPrices) pdf.text(item.price ? `${item.price} EUR` : "", margin + 120, yPos)
+      pdf.text(item.total ? `${item.total} EUR` : "", pageWidth - margin - 30, yPos)
+      yPos += 7
+    })
+  }
+
+  // Información de pago y total al final de la página
+  yPos = pageHeight - 40
+
+  pdf.setFontSize(10)
+  pdf.text("Forma de pago (Transferencia)", margin, yPos)
+  yPos += 7
+  pdf.text("Cuenta bancaria:", margin, yPos)
+  yPos += 7
+  pdf.text(editableText.bankAccount, margin, yPos)
+  yPos += 10
+
+  // Línea punteada
+  pdf.setLineDashPattern([2, 2], 0)
+  pdf.line(margin, yPos, pageWidth - margin, yPos)
+  pdf.setLineDashPattern([], 0)
+  yPos += 10
+
+  // Total
+  pdf.setFontSize(12)
+  pdf.text(`TOTAL: ${calculateTotal()} EUR`, pageWidth - margin, yPos, { align: 'right' })
+
+  pdf.save(`FACTURA ${getCurrentMonthInvoiceNumber()} Darwin Alejandro.pdf`)
+}
 
   return (
     <div className="container mx-auto p-4">
@@ -100,6 +261,24 @@ export default function InvoiceGenerator() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <h2 className="text-xl font-semibold mb-2">Entrada de Datos</h2>
+          
+          {/* Checkbox para layout mejorado */}
+          <div className="mb-4 p-4 border rounded bg-gray-50">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="improved-layout" 
+                checked={useImprovedLayout}
+                onCheckedChange={(checked) => setUseImprovedLayout(checked as boolean)}
+              />
+              <Label htmlFor="improved-layout" className="text-sm font-medium">
+                Usar layout mejorado (separa proyectos de resumen de pagos)
+              </Label>
+            </div>
+            <p className="text-xs text-gray-600 mt-1">
+              Mejora la estética separando la información de proyectos del resumen de pagos con más espacio entre columnas
+            </p>
+          </div>
+          
           <div className="space-y-4">
             {items.map((item, index) => (
               <div key={index} className="space-y-2 p-4 border rounded">
@@ -165,10 +344,10 @@ export default function InvoiceGenerator() {
             total={calculateTotal()}
             editableText={editableText}
             onEditableTextChange={handleEditableTextChange}
+            useImprovedLayout={useImprovedLayout}
           />
         </div>
       </div>
     </div>
   )
 }
-
