@@ -109,7 +109,7 @@ const exportToPDF = async () => {
     pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight)
   }
   
-  pdf.save(`FACTURA ${getCurrentMonthInvoiceNumber()} Darwin Alejandro.pdf`)
+  pdf.save(`FACTURA DARWIN ELÉGIGA ${getCurrentMonthInvoiceNumber()}.pdf`)
 }
 
 // Alternativa más ligera usando solo jsPDF (sin html2canvas):
@@ -242,17 +242,14 @@ const exportToPDFLightweight = () => {
   pdf.text(editableText.bankAccount, margin, yPos)
   yPos += 10
 
-  // Línea punteada
   pdf.setLineDashPattern([2, 2], 0)
   pdf.line(margin, yPos, pageWidth - margin, yPos)
   pdf.setLineDashPattern([], 0)
   yPos += 10
 
-  // Total
   pdf.setFontSize(12)
   pdf.text(`TOTAL: ${calculateTotal()} EUR`, pageWidth - margin, yPos, { align: 'right' })
-// s
-  pdf.save(`FACTURA ${getCurrentMonthInvoiceNumber()} Darwin Alejandro.pdf`)
+  pdf.save(`FACTURA DARWIN ELÉGIGA ${getCurrentMonthInvoiceNumber()}`)
 }
 
   return (
