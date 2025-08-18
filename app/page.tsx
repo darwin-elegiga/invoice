@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { InvoicePreview } from "./components/InvoicePreview"
 import { jsPDF } from "jspdf"
 import { PlusCircle } from "lucide-react"
-import { getCurrentMonthInvoiceNumber, getLastDayOfMonth } from "./utils/date-utils"
+import { getCurrentMonthInvoiceName, getCurrentMonthInvoiceNumber, getLastDayOfMonth } from "./utils/date-utils"
 import html2canvas from "html2canvas"
 import { Checkbox } from "@/components/ui/checkbox"
 
@@ -109,7 +109,7 @@ const exportToPDF = async () => {
     pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight)
   }
   
-  pdf.save(`FACTURA DARWIN ELÉGIGA ${getCurrentMonthInvoiceNumber()}.pdf`)
+  pdf.save(`FACTURA DARWIN ELÉGIGA ${getCurrentMonthInvoiceName()}.pdf`)
 }
 
 // Alternativa más ligera usando solo jsPDF (sin html2canvas):

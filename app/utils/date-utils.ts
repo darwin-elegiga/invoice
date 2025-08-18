@@ -5,6 +5,19 @@ export function getCurrentMonthInvoiceNumber(): string {
   const x= 0;
   return `${month}-${year}`
 }
+export function getCurrentMonthInvoiceName(): string {
+  const date = new Date()
+  const monthIndex = date.getMonth() 
+  const year = date.getFullYear()
+
+  const meses = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+  ]
+
+  const nombreMes = meses[monthIndex]
+  return `${nombreMes.toUpperCase()} ${year}`
+}
 
 export function getLastDayOfMonth(): string {
   const date = new Date()
