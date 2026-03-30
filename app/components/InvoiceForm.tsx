@@ -14,7 +14,12 @@ interface InvoiceItem {
 interface EditableTextProps {
   companyName: string
   nif: string
+  bankName: string
+  swiftBic: string
+  beneficiary: string
   bankAccount: string
+  cci: string
+  bankAddress: string
   address: string
   clientName: string
   clientId: string

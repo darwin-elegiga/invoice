@@ -10,7 +10,12 @@ interface InvoiceItem {
 interface EditableTextProps {
   companyName: string
   nif: string
+  bankName: string
+  swiftBic: string
+  beneficiary: string
   bankAccount: string
+  cci: string
+  bankAddress: string
   address: string
   clientName: string
   clientId: string
@@ -122,9 +127,14 @@ export function InvoicePreview({
           {/* Payment Info */}
           <div className="mt-auto">
             <div className="mb-8">
-              <p className="mb-1">Forma de pago (Transferencia)</p>
-              <p className="mb-1">Cuenta bancaria:</p>
-              <p>{editableText.bankAccount}</p>
+              <div className="border-t border-dotted border-black w-full my-4"></div>
+              <p className="mb-1">Forma de pago (Transferencia Internacional)</p>
+              <p className="mb-1">Banco: {editableText.bankName}</p>
+              <p className="mb-1">SWIFT/BIC: {editableText.swiftBic}</p>
+              <p className="mb-1">Beneficiario: {editableText.beneficiary}</p>
+              <p className="mb-1">Cuenta: {editableText.bankAccount}</p>
+              <p className="mb-1">CCI: {editableText.cci}</p>
+              <p>Dirección: {editableText.bankAddress}</p>
               <div className="border-t border-dotted border-black w-full my-4"></div>
             </div>
 
@@ -204,9 +214,14 @@ export function InvoicePreview({
         {/* Payment Info */}
         <div className="mt-auto">
           <div className="mb-8">
-            <p className="mb-1">Forma de pago (Transferencia)</p>
-            <p className="mb-1">Cuenta bancaria:</p>
-            <p>{editableText.bankAccount}</p>
+            <div className="border-t border-dotted border-black w-full my-4"></div>
+            <p className="mb-1">Forma de pago (Transferencia Internacional)</p>
+            <p className="mb-1">Banco: {editableText.bankName}</p>
+            <p className="mb-1">SWIFT/BIC: {editableText.swiftBic}</p>
+            <p className="mb-1">Beneficiario: {editableText.beneficiary}</p>
+            <p className="mb-1">Cuenta: {editableText.bankAccount}</p>
+            <p className="mb-1">CCI: {editableText.cci}</p>
+            <p>Dirección: {editableText.bankAddress}</p>
             <div className="border-t border-dotted border-black w-full my-4"></div>
           </div>
 

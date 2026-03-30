@@ -26,7 +26,12 @@ export default function InvoiceGenerator() {
   const [editableText, setEditableText] = useState({
     companyName: "LYN Soluciones Tecnológicas S.L",
     nif: "B72652290",
-    bankAccount: "ES46 2100 3211 0422 0040 1276",
+    bankName: "BBVA Perú",
+    swiftBic: "BCONPEPL",
+    beneficiary: "Grisel Rosabal Safonts",
+    bankAccount: "0011-0814-0291745585",
+    cci: "011-814-000291745585-15",
+    bankAddress: "Calle 4 Nro 110, Dpto 4A, 15088, Lima, Perú",
     address:
       "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 409,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
     clientName: "Darwin Alejandro Elégiga López",
@@ -235,11 +240,19 @@ const exportToPDFLightweight = () => {
   yPos = pageHeight - 40
 
   pdf.setFontSize(10)
-  pdf.text("Forma de pago (Transferencia)", margin, yPos)
+  pdf.text("Forma de pago (Transferencia Internacional)", margin, yPos)
   yPos += 7
-  pdf.text("Cuenta bancaria:", margin, yPos)
+  pdf.text(`Banco: ${editableText.bankName}`, margin, yPos)
   yPos += 7
-  pdf.text(editableText.bankAccount, margin, yPos)
+  pdf.text(`SWIFT/BIC: ${editableText.swiftBic}`, margin, yPos)
+  yPos += 7
+  pdf.text(`Beneficiario: ${editableText.beneficiary}`, margin, yPos)
+  yPos += 7
+  pdf.text(`Cuenta: ${editableText.bankAccount}`, margin, yPos)
+  yPos += 7
+  pdf.text(`CCI: ${editableText.cci}`, margin, yPos)
+  yPos += 7
+  pdf.text(`Dirección: ${editableText.bankAddress}`, margin, yPos)
   yPos += 10
 
   pdf.setLineDashPattern([2, 2], 0)
