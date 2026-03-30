@@ -9,20 +9,19 @@ import { jsPDF } from "jspdf"
 import { PlusCircle } from "lucide-react"
 import { getCurrentMonthInvoiceName, getCurrentMonthInvoiceNumber, getLastDayOfMonth } from "./utils/date-utils"
 import html2canvas from "html2canvas"
-import { Checkbox } from "@/components/ui/checkbox"
 
 
 interface InvoiceItem {
   description: string
-  units: string
-  price?: string
-  total: string
   client: string
 }
 
 export default function InvoiceGenerator() {
-  const [items, setItems] = useState<InvoiceItem[]>([{ description: "", units: "", price: "", total: "", client: "" }])
-  const [useImprovedLayout, setUseImprovedLayout] = useState(false)
+  const [items, setItems] = useState<InvoiceItem[]>([{ description: "", client: "" }])
+  const [invoiceUnits, setInvoiceUnits] = useState("")
+  const [invoicePrice, setInvoicePrice] = useState("")
+  const [invoiceTotal, setInvoiceTotal] = useState("")
+
   const [editableText, setEditableText] = useState({
     companyName: "LYN Soluciones Tecnológicas S.L",
     nif: "B72652290",
@@ -59,21 +58,31 @@ export default function InvoiceGenerator() {
     setItems(newItems)
   }
 
+  const handleUnitsChange = (value: string) => {
+    setInvoiceUnits(value)
+    const units = parseFloat(value) || 0
+    const price = parseFloat(invoicePrice) || 0
+    if (units && price) {
+      setInvoiceTotal((units * price).toFixed(2))
+    }
+  }
+
+  const handlePriceChange = (value: string) => {
+    setInvoicePrice(value)
+    const units = parseFloat(invoiceUnits) || 0
+    const price = parseFloat(value) || 0
+    if (units && price) {
+      setInvoiceTotal((units * price).toFixed(2))
+    }
+  }
+
   const addItem = () => {
-    setItems([...items, { description: "", units: "", price: "", total: "", client: "" }])
+    setItems([...items, { description: "", client: "" }])
   }
 
   const removeItem = (index: number) => {
     const newItems = items.filter((_, i) => i !== index)
     setItems(newItems)
-  }
-
-  const calculateTotal = () => {
-    return items
-      .reduce((total, item) => {
-        return total + Number.parseFloat(item.total || "0")
-      }, 0)
-      .toFixed(2)
   }
 
 const exportToPDF = async () => {
@@ -172,69 +181,39 @@ const exportToPDFLightweight = () => {
   })
   yPos += 20
 
-  // Tabla de items
-  const tableStartY = yPos
-  const hasPrices = items.some((item) => item.price && item.price.trim() !== "")
-  
-  if (useImprovedLayout) {
-    // Layout mejorado - Proyectos
-    pdf.setFontSize(10)
-    pdf.text("Descripción", margin, yPos)
-    pdf.text("Cliente", margin + 100, yPos)
-    yPos += 7
-    
-    // Línea de separación
-    pdf.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 7
+  // Tabla de items - Proyectos y Clientes
+  pdf.setFontSize(10)
+  pdf.text("Proyecto", margin, yPos)
+  pdf.text("Cliente", margin + 100, yPos)
+  yPos += 7
 
-    items.forEach(item => {
-      pdf.text(item.description, margin, yPos)
-      pdf.text(item.client, margin + 100, yPos)
-      yPos += 7
-    })
+  pdf.line(margin, yPos, pageWidth - margin, yPos)
+  yPos += 7
 
-    yPos += 10
-    pdf.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 15
+  items.forEach(item => {
+    pdf.text(item.description, margin, yPos)
+    pdf.text(item.client, margin + 100, yPos)
+    yPos += 7
+  })
 
-    // Resumen de pagos
-    const tableX = pageWidth - margin - 80
-    pdf.text("Unidades", tableX, yPos)
-    if (hasPrices) pdf.text("Precio x h", tableX + 25, yPos)
-    pdf.text("Total", tableX + 55, yPos)
-    yPos += 7
-    
-    pdf.line(tableX, yPos, pageWidth - margin, yPos)
-    yPos += 7
+  yPos += 10
+  pdf.line(margin, yPos, pageWidth - margin, yPos)
+  yPos += 15
 
-    items.forEach(item => {
-      pdf.text(item.units, tableX, yPos)
-      if (hasPrices) pdf.text(item.price ? `${item.price} EUR` : "", tableX + 25, yPos)
-      pdf.text(item.total ? `${item.total} EUR` : "", tableX + 55, yPos)
-      yPos += 7
-    })
-  } else {
-    // Layout original
-    pdf.setFontSize(10)
-    pdf.text("Descripción", margin, yPos)
-    pdf.text("Cliente", margin + 50, yPos)
-    pdf.text("Unidades", margin + 90, yPos)
-    if (hasPrices) pdf.text("Precio x h", margin + 120, yPos)
-    pdf.text("Total", pageWidth - margin - 30, yPos)
-    yPos += 7
-    
-    pdf.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 7
+  // Resumen de pagos (global)
+  const tableX = pageWidth - margin - 80
+  pdf.text("Unidades", tableX, yPos)
+  if (invoicePrice) pdf.text("Precio x h", tableX + 25, yPos)
+  pdf.text("Total", tableX + 55, yPos)
+  yPos += 7
 
-    items.forEach(item => {
-      pdf.text(item.description, margin, yPos)
-      pdf.text(item.client, margin + 50, yPos)
-      pdf.text(item.units, margin + 90, yPos)
-      if (hasPrices) pdf.text(item.price ? `${item.price} EUR` : "", margin + 120, yPos)
-      pdf.text(item.total ? `${item.total} EUR` : "", pageWidth - margin - 30, yPos)
-      yPos += 7
-    })
-  }
+  pdf.line(tableX, yPos, pageWidth - margin, yPos)
+  yPos += 7
+
+  pdf.text(invoiceUnits, tableX, yPos)
+  if (invoicePrice) pdf.text(`${invoicePrice} EUR`, tableX + 25, yPos)
+  pdf.text(invoiceTotal ? `${invoiceTotal} EUR` : "", tableX + 55, yPos)
+  yPos += 7
 
   // Información de pago y total al final de la página
   yPos = pageHeight - 40
@@ -261,67 +240,27 @@ const exportToPDFLightweight = () => {
   yPos += 10
 
   pdf.setFontSize(12)
-  pdf.text(`TOTAL: ${calculateTotal()} EUR`, pageWidth - margin, yPos, { align: 'right' })
+  pdf.text(`TOTAL: ${invoiceTotal} EUR`, pageWidth - margin, yPos, { align: 'right' })
   pdf.save(`FACTURA DARWIN ELÉGIGA ${getCurrentMonthInvoiceNumber()}`)
 }
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Generador de Facturas</h1>
+      <h1 className="text-2xl font-bold mb-4">Facturas LYN</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <h2 className="text-xl font-semibold mb-2">Entrada de Datos</h2>
           
-          {/* Checkbox para layout mejorado */}
-          <div className="mb-4 p-4 border rounded bg-gray-50">
-            <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="improved-layout" 
-                checked={useImprovedLayout}
-                onCheckedChange={(checked) => setUseImprovedLayout(checked as boolean)}
-              />
-              <Label htmlFor="improved-layout" className="text-sm font-medium">
-                Usar layout mejorado (separa proyectos de resumen de pagos)
-              </Label>
-            </div>
-            <p className="text-xs text-gray-600 mt-1">
-              Mejora la estética separando la información de proyectos del resumen de pagos con más espacio entre columnas
-            </p>
-          </div>
-          
+          {/* Items: Proyecto y Cliente */}
           <div className="space-y-4">
             {items.map((item, index) => (
               <div key={index} className="space-y-2 p-4 border rounded">
                 <div>
-                  <Label htmlFor={`description-${index}`}>Descripción</Label>
+                  <Label htmlFor={`description-${index}`}>Proyecto</Label>
                   <Input
                     id={`description-${index}`}
                     value={item.description}
                     onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor={`units-${index}`}>Unidades</Label>
-                  <Input
-                    id={`units-${index}`}
-                    value={item.units}
-                    onChange={(e) => handleItemChange(index, "units", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor={`price-${index}`}>Precio por unidad (opcional)</Label>
-                  <Input
-                    id={`price-${index}`}
-                    value={item.price}
-                    onChange={(e) => handleItemChange(index, "price", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor={`total-${index}`}>Total</Label>
-                  <Input
-                    id={`total-${index}`}
-                    value={item.total}
-                    onChange={(e) => handleItemChange(index, "total", e.target.value)}
                   />
                 </div>
                 <div>
@@ -343,6 +282,35 @@ const exportToPDFLightweight = () => {
               <PlusCircle className="mr-2 h-4 w-4" /> Agregar Item
             </Button>
           </div>
+
+          {/* Resumen de pago (global) */}
+          <div className="mt-4 p-4 border rounded bg-gray-50 space-y-2">
+            <h3 className="font-semibold">Resumen de Pago</h3>
+            <div>
+              <Label htmlFor="invoice-units">Unidades</Label>
+              <Input
+                id="invoice-units"
+                value={invoiceUnits}
+                onChange={(e) => handleUnitsChange(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="invoice-price">Precio por unidad (opcional)</Label>
+              <Input
+                id="invoice-price"
+                value={invoicePrice}
+                onChange={(e) => handlePriceChange(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="invoice-total">Total</Label>
+              <Input
+                id="invoice-total"
+                value={invoiceTotal}
+                onChange={(e) => setInvoiceTotal(e.target.value)}
+              />
+            </div>
+          </div>
           <Button className="mt-4" onClick={exportToPDF}>
             Exportar a PDF
           </Button>
@@ -351,10 +319,11 @@ const exportToPDFLightweight = () => {
           <h2 className="text-xl font-semibold mb-2">Vista Previa</h2>
           <InvoicePreview
             items={items}
-            total={calculateTotal()}
+            units={invoiceUnits}
+            price={invoicePrice}
+            total={invoiceTotal}
             editableText={editableText}
             onEditableTextChange={handleEditableTextChange}
-            useImprovedLayout={useImprovedLayout}
           />
         </div>
       </div>

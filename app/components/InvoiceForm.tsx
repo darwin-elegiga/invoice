@@ -5,9 +5,6 @@ import { PlusCircle } from "lucide-react"
 
 interface InvoiceItem {
   description: string
-  units: string
-  price?: string
-  total: string
   client: string
 }
 
@@ -65,35 +62,11 @@ export function InvoiceForm({
         {items.map((item, index) => (
           <div key={index} className="space-y-2 p-4 border rounded">
             <div>
-              <Label htmlFor={`description-${index}`}>Descripción</Label>
+              <Label htmlFor={`description-${index}`}>Proyecto</Label>
               <Input
                 id={`description-${index}`}
                 value={item.description}
                 onChange={(e) => onItemChange(index, "description", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor={`units-${index}`}>Unidades</Label>
-              <Input
-                id={`units-${index}`}
-                value={item.units}
-                onChange={(e) => onItemChange(index, "units", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor={`price-${index}`}>Precio por unidad (opcional)</Label>
-              <Input
-                id={`price-${index}`}
-                value={item.price}
-                onChange={(e) => onItemChange(index, "price", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor={`total-${index}`}>Total</Label>
-              <Input
-                id={`total-${index}`}
-                value={item.total}
-                onChange={(e) => onItemChange(index, "total", e.target.value)}
               />
             </div>
             <div>
@@ -118,4 +91,3 @@ export function InvoiceForm({
     </div>
   )
 }
-
