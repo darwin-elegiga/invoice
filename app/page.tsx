@@ -34,8 +34,8 @@ export default function InvoiceGenerator() {
     address:
       "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 409,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
     clientName: "Darwin Alejandro Elégiga López",
-    clientId: "02100682665",
-    clientAddress: "Calle Martí # 162, Palma Soriano, Santiago de Cuba, Cuba",
+    clientId: "L547719",
+    clientAddress: "Carrera 12B 7B-17, Melgar, Tolima, Colombia",
     invoiceNumber: getCurrentMonthInvoiceNumber(),
     date: getLastDayOfMonth(),
   })
@@ -169,16 +169,11 @@ const exportToPDFLightweight = () => {
 
   // Información del cliente
   pdf.setFontSize(11)
-  pdf.text(editableText.clientName, margin, yPos)
+  pdf.text(`Nombre: ${editableText.clientName}`, margin, yPos)
   yPos += 7
-  pdf.text(editableText.clientId, margin, yPos)
+  pdf.text(`ID: ${editableText.clientId}`, margin, yPos)
   yPos += 7
-  
-  const clientAddressLines = editableText.clientAddress.split('\n')
-  clientAddressLines.forEach(line => {
-    pdf.text(line, margin, yPos)
-    yPos += 5
-  })
+  pdf.text(`Dirección: ${editableText.clientAddress}`, margin, yPos)
   yPos += 20
 
   // Tabla de items - Proyectos y Clientes
