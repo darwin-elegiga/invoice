@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server"
-import { promises as fs } from "fs"
-import path from "path"
 import crypto from "crypto"
+import { put } from "@vercel/blob"
+import { redis, KV_KEYS } from "@/lib/storage"
 
-const DATA_DIR = path.join(process.cwd(), "data")
-const INDEX_FILE = path.join(DATA_DIR, "invoices.json")
-const FILES_DIR = path.join(DATA_DIR, "invoices-files")
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 export type InvoiceRecord = {
   id: string
@@ -17,21 +16,18 @@ export type InvoiceRecord = {
   clientName: string
   notes: string
   fileName: string
+  blobUrl: string
+  blobPath: string
   uploadedAt: string
 }
 
 async function readIndex(): Promise<InvoiceRecord[]> {
-  try {
-    const raw = await fs.readFile(INDEX_FILE, "utf-8")
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
+  const stored = await redis.get<InvoiceRecord[]>(KV_KEYS.invoices)
+  return Array.isArray(stored) ? stored : []
 }
 
 async function writeIndex(records: InvoiceRecord[]) {
-  await fs.writeFile(INDEX_FILE, JSON.stringify(records, null, 2) + "\n", "utf-8")
+  await redis.set(KV_KEYS.invoices, records)
 }
 
 export async function GET() {
@@ -62,13 +58,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "file must be a PDF" }, { status: 400 })
   }
 
-  await fs.mkdir(FILES_DIR, { recursive: true })
-
   const id = crypto.randomUUID()
   const safeName = file.name.replace(/[^\w.\- ]+/g, "_")
-  const storedName = `${id}__${safeName}`
-  const buffer = Buffer.from(await file.arrayBuffer())
-  await fs.writeFile(path.join(FILES_DIR, storedName), buffer)
+  const blobPath = `invoices/${id}__${safeName}`
+  const blob = await put(blobPath, file, {
+    access: "public",
+    contentType: "application/pdf",
+  })
 
   const [yearStr, monthStr] = date.split("-")
   const record: InvoiceRecord = {
@@ -80,7 +76,9 @@ export async function POST(request: Request) {
     total,
     clientName,
     notes,
-    fileName: storedName,
+    fileName: file.name,
+    blobUrl: blob.url,
+    blobPath: blob.pathname,
     uploadedAt: new Date().toISOString(),
   }
 

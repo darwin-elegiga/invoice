@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
-import { promises as fs } from "fs"
-import path from "path"
+import { redis, KV_KEYS } from "@/lib/storage"
 
-const FILE_PATH = path.join(process.cwd(), "data", "bank-info.json")
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 const FIELDS = [
   "bankName",
@@ -20,30 +20,42 @@ const FIELDS = [
 
 type BankInfo = Record<(typeof FIELDS)[number], string>
 
-async function readBankInfo(): Promise<BankInfo> {
-  const raw = await fs.readFile(FILE_PATH, "utf-8")
-  const parsed = JSON.parse(raw) as Partial<BankInfo>
+const DEFAULTS: BankInfo = {
+  bankName: "BBVA Perú",
+  swiftBic: "BCONPEPL",
+  beneficiary: "Grisel Rosabal Safonts",
+  bankAccount: "0011-0814-0291745585",
+  cci: "011-814-000291745585-15",
+  bankAddress: "Calle 4 Nro 110, Dpto 4A, 15088, Lima, Perú",
+  cardHolder: "",
+  cardLast4: "",
+  cardBrand: "",
+  paymentLink: "",
+  paymentPlatform: "",
+}
+
+function withDefaults(stored: Partial<BankInfo> | null): BankInfo {
   const result = {} as BankInfo
   for (const field of FIELDS) {
-    result[field] = parsed[field] ?? ""
+    result[field] = stored?.[field] ?? DEFAULTS[field]
   }
   return result
 }
 
 export async function GET() {
-  const data = await readBankInfo()
-  return NextResponse.json(data)
+  const stored = await redis.get<Partial<BankInfo>>(KV_KEYS.bankInfo)
+  return NextResponse.json(withDefaults(stored))
 }
 
 export async function PUT(request: Request) {
   const body = await request.json()
-  const current = await readBankInfo()
+  const current = withDefaults(await redis.get<Partial<BankInfo>>(KV_KEYS.bankInfo))
   const next: BankInfo = { ...current }
   for (const field of FIELDS) {
     if (typeof body[field] === "string") {
       next[field] = body[field]
     }
   }
-  await fs.writeFile(FILE_PATH, JSON.stringify(next, null, 2) + "\n", "utf-8")
+  await redis.set(KV_KEYS.bankInfo, next)
   return NextResponse.json(next)
 }

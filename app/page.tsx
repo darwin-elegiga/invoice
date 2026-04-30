@@ -143,6 +143,10 @@ export default function InvoiceGenerator() {
       setBankEditMode(false)
       setBankDraft({})
     } catch {
+      // Aun sin servidor disponible, aplicar cambios localmente para que la UI refleje la edición
+      setEditableText((prev) => ({ ...prev, ...bankDraft }))
+      setBankEditMode(false)
+      setBankDraft({})
       setBankSaveStatus("error")
     }
   }
@@ -489,7 +493,7 @@ const exportToPDFLightweight = () => {
               <span className="flex items-center gap-2 text-xs font-normal text-gray-500">
                 {bankSaveStatus === "saving" && "Guardando…"}
                 {bankSaveStatus === "saved" && "Guardado"}
-                {bankSaveStatus === "error" && "Error al guardar"}
+                {bankSaveStatus === "error" && "Solo local (servidor no disponible)"}
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
               </span>
             </CollapsibleTrigger>

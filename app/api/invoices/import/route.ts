@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server"
-import { promises as fs } from "fs"
-import path from "path"
+import { redis, KV_KEYS } from "@/lib/storage"
 
-const DATA_DIR = path.join(process.cwd(), "data")
-const INDEX_FILE = path.join(DATA_DIR, "invoices.json")
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 type InvoiceRecord = {
   id: string
@@ -15,6 +14,8 @@ type InvoiceRecord = {
   clientName: string
   notes: string
   fileName: string
+  blobUrl: string
+  blobPath: string
   uploadedAt: string
 }
 
@@ -22,7 +23,14 @@ const REQUIRED_KEYS: (keyof InvoiceRecord)[] = [
   "id", "invoiceNumber", "date", "year", "month", "fileName",
 ]
 
-function isValidRecord(value: unknown): value is InvoiceRecord {
+function isValidRecord(value: unknown): value is Partial<InvoiceRecord> & {
+  id: string
+  invoiceNumber: string
+  date: string
+  year: number
+  month: number
+  fileName: string
+} {
   if (!value || typeof value !== "object") return false
   const r = value as Record<string, unknown>
   for (const k of REQUIRED_KEYS) {
@@ -38,7 +46,14 @@ function isValidRecord(value: unknown): value is InvoiceRecord {
   )
 }
 
-function normalize(r: InvoiceRecord): InvoiceRecord {
+function normalize(r: Partial<InvoiceRecord> & {
+  id: string
+  invoiceNumber: string
+  date: string
+  year: number
+  month: number
+  fileName: string
+}): InvoiceRecord {
   return {
     id: r.id,
     invoiceNumber: r.invoiceNumber,
@@ -49,18 +64,15 @@ function normalize(r: InvoiceRecord): InvoiceRecord {
     clientName: r.clientName ?? "",
     notes: r.notes ?? "",
     fileName: r.fileName,
+    blobUrl: r.blobUrl ?? "",
+    blobPath: r.blobPath ?? "",
     uploadedAt: r.uploadedAt ?? new Date().toISOString(),
   }
 }
 
 async function readIndex(): Promise<InvoiceRecord[]> {
-  try {
-    const raw = await fs.readFile(INDEX_FILE, "utf-8")
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
+  const stored = await redis.get<InvoiceRecord[]>(KV_KEYS.invoices)
+  return Array.isArray(stored) ? stored : []
 }
 
 export async function POST(request: Request) {
@@ -92,7 +104,7 @@ export async function POST(request: Request) {
     byId.set(r.id, r)
   }
   const merged = Array.from(byId.values())
-  await fs.writeFile(INDEX_FILE, JSON.stringify(merged, null, 2) + "\n", "utf-8")
+  await redis.set(KV_KEYS.invoices, merged)
 
   return NextResponse.json({
     total: merged.length,

@@ -1,29 +1,25 @@
 import { NextResponse } from "next/server"
-import { promises as fs } from "fs"
-import path from "path"
+import { del } from "@vercel/blob"
+import { redis, KV_KEYS } from "@/lib/storage"
 
-const DATA_DIR = path.join(process.cwd(), "data")
-const INDEX_FILE = path.join(DATA_DIR, "invoices.json")
-const FILES_DIR = path.join(DATA_DIR, "invoices-files")
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 type InvoiceRecord = {
   id: string
   fileName: string
+  blobUrl: string
+  blobPath: string
   [k: string]: unknown
 }
 
 async function readIndex(): Promise<InvoiceRecord[]> {
-  try {
-    const raw = await fs.readFile(INDEX_FILE, "utf-8")
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
+  const stored = await redis.get<InvoiceRecord[]>(KV_KEYS.invoices)
+  return Array.isArray(stored) ? stored : []
 }
 
 async function writeIndex(records: InvoiceRecord[]) {
-  await fs.writeFile(INDEX_FILE, JSON.stringify(records, null, 2) + "\n", "utf-8")
+  await redis.set(KV_KEYS.invoices, records)
 }
 
 export async function GET(
@@ -33,23 +29,10 @@ export async function GET(
   const { id } = await params
   const records = await readIndex()
   const record = records.find((r) => r.id === id)
-  if (!record) return NextResponse.json({ error: "not found" }, { status: 404 })
-  const filePath = path.join(FILES_DIR, record.fileName)
-  try {
-    const buffer = await fs.readFile(filePath)
-    const arrayBuffer = buffer.buffer.slice(
-      buffer.byteOffset,
-      buffer.byteOffset + buffer.byteLength,
-    ) as ArrayBuffer
-    return new NextResponse(arrayBuffer, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${record.fileName.split("__").slice(1).join("__") || record.fileName}"`,
-      },
-    })
-  } catch {
-    return NextResponse.json({ error: "file missing" }, { status: 404 })
+  if (!record || !record.blobUrl) {
+    return NextResponse.json({ error: "not found" }, { status: 404 })
   }
+  return NextResponse.redirect(record.blobUrl, 302)
 }
 
 export async function DELETE(
@@ -62,8 +45,10 @@ export async function DELETE(
   if (idx === -1) return NextResponse.json({ error: "not found" }, { status: 404 })
   const [removed] = records.splice(idx, 1)
   await writeIndex(records)
-  try {
-    await fs.unlink(path.join(FILES_DIR, removed.fileName))
-  } catch {}
+  if (removed.blobUrl) {
+    try {
+      await del(removed.blobUrl)
+    } catch {}
+  }
   return NextResponse.json({ ok: true })
 }
