@@ -11,13 +11,23 @@ const FIELDS = [
   "bankAccount",
   "cci",
   "bankAddress",
+  "cardHolder",
+  "cardLast4",
+  "cardBrand",
+  "paymentLink",
+  "paymentPlatform",
 ] as const
 
 type BankInfo = Record<(typeof FIELDS)[number], string>
 
 async function readBankInfo(): Promise<BankInfo> {
   const raw = await fs.readFile(FILE_PATH, "utf-8")
-  return JSON.parse(raw)
+  const parsed = JSON.parse(raw) as Partial<BankInfo>
+  const result = {} as BankInfo
+  for (const field of FIELDS) {
+    result[field] = parsed[field] ?? ""
+  }
+  return result
 }
 
 export async function GET() {

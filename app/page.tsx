@@ -12,7 +12,7 @@ import { ChevronDown, PlusCircle } from "lucide-react"
 import { getCurrentMonthInvoiceName, getCurrentMonthInvoiceNumber, getLastDayOfMonth, toIsoDate } from "./utils/date-utils"
 import html2canvas from "html2canvas"
 
-const BANK_FIELDS = [
+const TRANSFER_FIELDS = [
   { key: "bankName", label: "Banco" },
   { key: "swiftBic", label: "SWIFT/BIC" },
   { key: "beneficiary", label: "Beneficiario" },
@@ -20,6 +20,27 @@ const BANK_FIELDS = [
   { key: "cci", label: "CCI" },
   { key: "bankAddress", label: "Dirección" },
 ] as const
+
+const CARD_FIELDS = [
+  { key: "cardHolder", label: "Titular" },
+  { key: "cardLast4", label: "Últimos 4 dígitos" },
+  { key: "cardBrand", label: "Marca (Visa, Mastercard…)" },
+] as const
+
+const LINK_FIELDS = [
+  { key: "paymentPlatform", label: "Plataforma (Stripe, PayPal…)" },
+  { key: "paymentLink", label: "Enlace de pago" },
+] as const
+
+const BANK_FIELDS = [...TRANSFER_FIELDS, ...CARD_FIELDS, ...LINK_FIELDS] as const
+
+type PaymentMethod = "transferencia" | "tarjeta" | "enlace"
+
+const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
+  { value: "transferencia", label: "Transferencia internacional" },
+  { value: "tarjeta", label: "Tarjeta" },
+  { value: "enlace", label: "Enlace de pago" },
+]
 
 
 interface InvoiceItem {
@@ -32,6 +53,7 @@ export default function InvoiceGenerator() {
   const [invoiceUnits, setInvoiceUnits] = useState("")
   const [invoicePrice, setInvoicePrice] = useState("")
   const [invoiceTotal, setInvoiceTotal] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("transferencia")
 
   const [editableText, setEditableText] = useState({
     companyName: "LYN Soluciones Tecnológicas S.L",
@@ -42,6 +64,11 @@ export default function InvoiceGenerator() {
     bankAccount: "0011-0814-0291745585",
     cci: "011-814-000291745585-15",
     bankAddress: "Calle 4 Nro 110, Dpto 4A, 15088, Lima, Perú",
+    cardHolder: "",
+    cardLast4: "",
+    cardBrand: "",
+    paymentLink: "",
+    paymentPlatform: "",
     address:
       "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 409,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
     clientName: "Darwin Alejandro Elégiga López",
@@ -309,19 +336,45 @@ const exportToPDFLightweight = () => {
   yPos = pageHeight - 40
 
   pdf.setFontSize(10)
-  pdf.text("Forma de pago (Transferencia Internacional)", margin, yPos)
-  yPos += 7
-  pdf.text(`Banco: ${editableText.bankName}`, margin, yPos)
-  yPos += 7
-  pdf.text(`SWIFT/BIC: ${editableText.swiftBic}`, margin, yPos)
-  yPos += 7
-  pdf.text(`Beneficiario: ${editableText.beneficiary}`, margin, yPos)
-  yPos += 7
-  pdf.text(`Cuenta: ${editableText.bankAccount}`, margin, yPos)
-  yPos += 7
-  pdf.text(`CCI: ${editableText.cci}`, margin, yPos)
-  yPos += 7
-  pdf.text(`Dirección: ${editableText.bankAddress}`, margin, yPos)
+  if (paymentMethod === "transferencia") {
+    pdf.text("Forma de pago (Transferencia Internacional)", margin, yPos)
+    yPos += 7
+    pdf.text(`Banco: ${editableText.bankName}`, margin, yPos)
+    yPos += 7
+    pdf.text(`SWIFT/BIC: ${editableText.swiftBic}`, margin, yPos)
+    yPos += 7
+    pdf.text(`Beneficiario: ${editableText.beneficiary}`, margin, yPos)
+    yPos += 7
+    pdf.text(`Cuenta: ${editableText.bankAccount}`, margin, yPos)
+    yPos += 7
+    pdf.text(`CCI: ${editableText.cci}`, margin, yPos)
+    yPos += 7
+    pdf.text(`Dirección: ${editableText.bankAddress}`, margin, yPos)
+  } else if (paymentMethod === "tarjeta") {
+    pdf.text("Forma de pago (Tarjeta)", margin, yPos)
+    yPos += 7
+    if (editableText.cardBrand) {
+      pdf.text(`Marca: ${editableText.cardBrand}`, margin, yPos)
+      yPos += 7
+    }
+    if (editableText.cardHolder) {
+      pdf.text(`Titular: ${editableText.cardHolder}`, margin, yPos)
+      yPos += 7
+    }
+    if (editableText.cardLast4) {
+      pdf.text(`Tarjeta: **** **** **** ${editableText.cardLast4}`, margin, yPos)
+    }
+  } else {
+    pdf.text("Forma de pago (Enlace de pago)", margin, yPos)
+    yPos += 7
+    if (editableText.paymentPlatform) {
+      pdf.text(`Plataforma: ${editableText.paymentPlatform}`, margin, yPos)
+      yPos += 7
+    }
+    if (editableText.paymentLink) {
+      pdf.text(`Enlace: ${editableText.paymentLink}`, margin, yPos)
+    }
+  }
   yPos += 10
 
   pdf.setLineDashPattern([2, 2], 0)
@@ -378,6 +431,25 @@ const exportToPDFLightweight = () => {
             </Button>
           </div>
 
+          {/* Método de pago */}
+          <div className="mt-4 p-4 border rounded bg-gray-50 space-y-2">
+            <h3 className="font-semibold">Método de Pago</h3>
+            <div className="flex flex-wrap gap-3">
+              {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                <label key={opt.value} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="payment-method"
+                    value={opt.value}
+                    checked={paymentMethod === opt.value}
+                    onChange={() => setPaymentMethod(opt.value)}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+          </div>
+
           {/* Resumen de pago (global) */}
           <div className="mt-4 p-4 border rounded bg-gray-50 space-y-2">
             <h3 className="font-semibold">Resumen de Pago</h3>
@@ -410,10 +482,10 @@ const exportToPDFLightweight = () => {
             Exportar a PDF
           </Button>
 
-          {/* Datos Bancarios (colapsable, persistencia en JSON) */}
+          {/* Datos de cobro (colapsable, persistencia en JSON) */}
           <Collapsible className="mt-6 border rounded bg-gray-50">
             <CollapsibleTrigger className="flex w-full items-center justify-between p-4 font-semibold group">
-              <span>Datos Bancarios</span>
+              <span>Datos de Cobro</span>
               <span className="flex items-center gap-2 text-xs font-normal text-gray-500">
                 {bankSaveStatus === "saving" && "Guardando…"}
                 {bankSaveStatus === "saved" && "Guardado"}
@@ -421,23 +493,32 @@ const exportToPDFLightweight = () => {
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
               </span>
             </CollapsibleTrigger>
-            <CollapsibleContent className="px-4 pb-4 space-y-3">
-              {BANK_FIELDS.map(({ key, label }) => {
-                const value = bankEditMode
-                  ? bankDraft[key] ?? ""
-                  : (editableText as Record<string, string>)[key]
-                return (
-                  <div key={key}>
-                    <Label htmlFor={`bank-${key}`}>{label}</Label>
-                    <Input
-                      id={`bank-${key}`}
-                      value={value}
-                      disabled={!bankEditMode}
-                      onChange={(e) => handleBankDraftChange(key, e.target.value)}
-                    />
-                  </div>
-                )
-              })}
+            <CollapsibleContent className="px-4 pb-4 space-y-4">
+              {[
+                { title: "Transferencia internacional", fields: TRANSFER_FIELDS },
+                { title: "Tarjeta", fields: CARD_FIELDS },
+                { title: "Enlace de pago", fields: LINK_FIELDS },
+              ].map(({ title, fields }) => (
+                <div key={title} className="space-y-2">
+                  <h4 className="text-sm font-semibold text-gray-700">{title}</h4>
+                  {fields.map(({ key, label }) => {
+                    const value = bankEditMode
+                      ? bankDraft[key] ?? ""
+                      : (editableText as Record<string, string>)[key]
+                    return (
+                      <div key={key}>
+                        <Label htmlFor={`bank-${key}`}>{label}</Label>
+                        <Input
+                          id={`bank-${key}`}
+                          value={value}
+                          disabled={!bankEditMode}
+                          onChange={(e) => handleBankDraftChange(key, e.target.value)}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
               <div className="flex gap-2 pt-2">
                 {bankEditMode ? (
                   <>
@@ -472,6 +553,7 @@ const exportToPDFLightweight = () => {
             price={invoicePrice}
             total={invoiceTotal}
             editableText={editableText}
+            paymentMethod={paymentMethod}
             onEditableTextChange={handleEditableTextChange}
           />
         </div>

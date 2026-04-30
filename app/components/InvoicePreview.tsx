@@ -13,6 +13,11 @@ interface EditableTextProps {
   bankAccount: string
   cci: string
   bankAddress: string
+  cardHolder: string
+  cardLast4: string
+  cardBrand: string
+  paymentLink: string
+  paymentPlatform: string
   address: string
   clientName: string
   clientId: string
@@ -21,12 +26,15 @@ interface EditableTextProps {
   date: string
 }
 
+type PaymentMethod = "transferencia" | "tarjeta" | "enlace"
+
 export function InvoicePreview({
   items,
   units,
   price,
   total,
   editableText,
+  paymentMethod,
   onEditableTextChange,
 }: {
   items: InvoiceItem[]
@@ -34,6 +42,7 @@ export function InvoicePreview({
   price: string
   total: string
   editableText: EditableTextProps
+  paymentMethod: PaymentMethod
   onEditableTextChange: (key: string, value: string) => void
 }) {
   return (
@@ -121,13 +130,38 @@ export function InvoicePreview({
         <div className="mt-auto">
           <div className="mb-8">
             <div className="border-t border-dotted border-black w-full my-4"></div>
-            <p className="mb-1">Forma de pago (Transferencia Internacional)</p>
-            <p className="mb-1">Banco: {editableText.bankName}</p>
-            <p className="mb-1">SWIFT/BIC: {editableText.swiftBic}</p>
-            <p className="mb-1">Beneficiario: {editableText.beneficiary}</p>
-            <p className="mb-1">Cuenta: {editableText.bankAccount}</p>
-            <p className="mb-1">CCI: {editableText.cci}</p>
-            <p>Dirección: {editableText.bankAddress}</p>
+            {paymentMethod === "transferencia" && (
+              <>
+                <p className="mb-1">Forma de pago (Transferencia Internacional)</p>
+                <p className="mb-1">Banco: {editableText.bankName}</p>
+                <p className="mb-1">SWIFT/BIC: {editableText.swiftBic}</p>
+                <p className="mb-1">Beneficiario: {editableText.beneficiary}</p>
+                <p className="mb-1">Cuenta: {editableText.bankAccount}</p>
+                <p className="mb-1">CCI: {editableText.cci}</p>
+                <p>Dirección: {editableText.bankAddress}</p>
+              </>
+            )}
+            {paymentMethod === "tarjeta" && (
+              <>
+                <p className="mb-1">Forma de pago (Tarjeta)</p>
+                {editableText.cardBrand && <p className="mb-1">Marca: {editableText.cardBrand}</p>}
+                {editableText.cardHolder && <p className="mb-1">Titular: {editableText.cardHolder}</p>}
+                {editableText.cardLast4 && (
+                  <p className="mb-1">Tarjeta: **** **** **** {editableText.cardLast4}</p>
+                )}
+              </>
+            )}
+            {paymentMethod === "enlace" && (
+              <>
+                <p className="mb-1">Forma de pago (Enlace de pago)</p>
+                {editableText.paymentPlatform && (
+                  <p className="mb-1">Plataforma: {editableText.paymentPlatform}</p>
+                )}
+                {editableText.paymentLink && (
+                  <p className="mb-1 break-all">Enlace: {editableText.paymentLink}</p>
+                )}
+              </>
+            )}
             <div className="border-t border-dotted border-black w-full my-4"></div>
           </div>
 
