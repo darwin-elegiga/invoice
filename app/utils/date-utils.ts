@@ -28,3 +28,13 @@ export function getLastDayOfMonth(): string {
   return `${day}/${month}/${year}`
 }
 
+export function toIsoDate(input: string): string | null {
+  if (!input) return null
+  const trimmed = input.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+  const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (!m) return null
+  const [, d, mo, y] = m
+  return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`
+}
+

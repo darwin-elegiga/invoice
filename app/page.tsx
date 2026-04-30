@@ -4,11 +4,22 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import Link from "next/link"
 import { InvoicePreview } from "./components/InvoicePreview"
 import { jsPDF } from "jspdf"
-import { PlusCircle } from "lucide-react"
-import { getCurrentMonthInvoiceName, getCurrentMonthInvoiceNumber, getLastDayOfMonth } from "./utils/date-utils"
+import { ChevronDown, PlusCircle } from "lucide-react"
+import { getCurrentMonthInvoiceName, getCurrentMonthInvoiceNumber, getLastDayOfMonth, toIsoDate } from "./utils/date-utils"
 import html2canvas from "html2canvas"
+
+const BANK_FIELDS = [
+  { key: "bankName", label: "Banco" },
+  { key: "swiftBic", label: "SWIFT/BIC" },
+  { key: "beneficiary", label: "Beneficiario" },
+  { key: "bankAccount", label: "Cuenta" },
+  { key: "cci", label: "CCI" },
+  { key: "bankAddress", label: "Dirección" },
+] as const
 
 
 interface InvoiceItem {
@@ -40,6 +51,11 @@ export default function InvoiceGenerator() {
     date: getLastDayOfMonth(),
   })
 
+  const [bankInfoLoaded, setBankInfoLoaded] = useState(false)
+  const [bankEditMode, setBankEditMode] = useState(false)
+  const [bankDraft, setBankDraft] = useState<Record<string, string>>({})
+  const [bankSaveStatus, setBankSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+
   useEffect(() => {
     setEditableText((prev) => ({
       ...prev,
@@ -48,8 +64,64 @@ export default function InvoiceGenerator() {
     }))
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/bank-info")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        setEditableText((prev) => ({ ...prev, ...data }))
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setBankInfoLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const handleEditableTextChange = (key: string, value: string) => {
     setEditableText((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const startBankEdit = () => {
+    setBankDraft(
+      Object.fromEntries(
+        BANK_FIELDS.map(({ key }) => [key, (editableText as Record<string, string>)[key]]),
+      ),
+    )
+    setBankSaveStatus("idle")
+    setBankEditMode(true)
+  }
+
+  const cancelBankEdit = () => {
+    setBankDraft({})
+    setBankEditMode(false)
+    setBankSaveStatus("idle")
+  }
+
+  const saveBankEdit = async () => {
+    setBankSaveStatus("saving")
+    try {
+      const res = await fetch("/api/bank-info", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bankDraft),
+      })
+      if (!res.ok) throw new Error("save failed")
+      const saved = await res.json()
+      setEditableText((prev) => ({ ...prev, ...saved }))
+      setBankSaveStatus("saved")
+      setBankEditMode(false)
+      setBankDraft({})
+    } catch {
+      setBankSaveStatus("error")
+    }
+  }
+
+  const handleBankDraftChange = (key: string, value: string) => {
+    setBankDraft((prev) => ({ ...prev, [key]: value }))
   }
 
   const handleItemChange = (index: number, field: keyof InvoiceItem, value: string) => {
@@ -123,7 +195,30 @@ const exportToPDF = async () => {
     pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight)
   }
   
-  pdf.save(`FACTURA DARWIN ELÉGIGA ${getCurrentMonthInvoiceName()}.pdf`)
+  const fileName = `FACTURA DARWIN ELÉGIGA ${getCurrentMonthInvoiceName()}.pdf`
+  pdf.save(fileName)
+  await saveInvoiceToHistory(pdf.output("blob"), fileName)
+}
+
+const saveInvoiceToHistory = async (blob: Blob, fileName: string) => {
+  const isoDate = toIsoDate(editableText.date)
+  if (!isoDate) {
+    console.warn("No se pudo guardar en historial: fecha inválida", editableText.date)
+    return
+  }
+  const fd = new FormData()
+  fd.append("file", new File([blob], fileName, { type: "application/pdf" }))
+  fd.append("invoiceNumber", editableText.invoiceNumber)
+  fd.append("date", isoDate)
+  fd.append("total", invoiceTotal)
+  fd.append("clientName", editableText.clientName)
+  fd.append("notes", items.map((i) => i.description).filter(Boolean).join(" | "))
+  try {
+    const res = await fetch("/api/invoices", { method: "POST", body: fd })
+    if (!res.ok) console.warn("Fallo al guardar en historial", await res.text())
+  } catch (err) {
+    console.warn("Fallo al guardar en historial", err)
+  }
 }
 
 // Alternativa más ligera usando solo jsPDF (sin html2canvas):
@@ -241,7 +336,12 @@ const exportToPDFLightweight = () => {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Facturas LYN</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">Facturas LYN</h1>
+        <Link href="/historial" className="text-sm text-blue-600 hover:underline">
+          Historial →
+        </Link>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <h2 className="text-xl font-semibold mb-2">Entrada de Datos</h2>
@@ -309,6 +409,60 @@ const exportToPDFLightweight = () => {
           <Button className="mt-4" onClick={exportToPDF}>
             Exportar a PDF
           </Button>
+
+          {/* Datos Bancarios (colapsable, persistencia en JSON) */}
+          <Collapsible className="mt-6 border rounded bg-gray-50">
+            <CollapsibleTrigger className="flex w-full items-center justify-between p-4 font-semibold group">
+              <span>Datos Bancarios</span>
+              <span className="flex items-center gap-2 text-xs font-normal text-gray-500">
+                {bankSaveStatus === "saving" && "Guardando…"}
+                {bankSaveStatus === "saved" && "Guardado"}
+                {bankSaveStatus === "error" && "Error al guardar"}
+                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+              </span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="px-4 pb-4 space-y-3">
+              {BANK_FIELDS.map(({ key, label }) => {
+                const value = bankEditMode
+                  ? bankDraft[key] ?? ""
+                  : (editableText as Record<string, string>)[key]
+                return (
+                  <div key={key}>
+                    <Label htmlFor={`bank-${key}`}>{label}</Label>
+                    <Input
+                      id={`bank-${key}`}
+                      value={value}
+                      disabled={!bankEditMode}
+                      onChange={(e) => handleBankDraftChange(key, e.target.value)}
+                    />
+                  </div>
+                )
+              })}
+              <div className="flex gap-2 pt-2">
+                {bankEditMode ? (
+                  <>
+                    <Button
+                      onClick={saveBankEdit}
+                      disabled={bankSaveStatus === "saving"}
+                    >
+                      {bankSaveStatus === "saving" ? "Guardando…" : "Guardar"}
+                    </Button>
+                    <Button variant="outline" onClick={cancelBankEdit}>
+                      Cancelar
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={startBankEdit}
+                    disabled={!bankInfoLoaded}
+                  >
+                    Editar
+                  </Button>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
         <div>
           <h2 className="text-xl font-semibold mb-2">Vista Previa</h2>
