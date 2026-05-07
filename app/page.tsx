@@ -9,7 +9,16 @@ import Link from "next/link"
 import { InvoicePreview } from "./components/InvoicePreview"
 import { jsPDF } from "jspdf"
 import { ChevronDown, PlusCircle } from "lucide-react"
-import { getCurrentMonthInvoiceName, getCurrentMonthInvoiceNumber, getLastDayOfMonth, toIsoDate } from "./utils/date-utils"
+import {
+  getCurrentMonthInvoiceNumber,
+  getInvoiceNameForDate,
+  getInvoiceNumberForDate,
+  getLastDayIsoForDate,
+  getLastDayOfMonth,
+  fromIsoDate,
+  isoToDate,
+  toIsoDate,
+} from "./utils/date-utils"
 import html2canvas from "html2canvas"
 
 const TRANSFER_FIELDS = [
@@ -82,14 +91,28 @@ export default function InvoiceGenerator() {
   const [bankEditMode, setBankEditMode] = useState(false)
   const [bankDraft, setBankDraft] = useState<Record<string, string>>({})
   const [bankSaveStatus, setBankSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [selectedIsoDate, setSelectedIsoDate] = useState<string>(() => getLastDayIsoForDate())
 
   useEffect(() => {
+    const iso = getLastDayIsoForDate()
+    setSelectedIsoDate(iso)
     setEditableText((prev) => ({
       ...prev,
       invoiceNumber: getCurrentMonthInvoiceNumber(),
       date: getLastDayOfMonth(),
     }))
   }, [])
+
+  const handleDateChange = (iso: string) => {
+    setSelectedIsoDate(iso)
+    const d = isoToDate(iso)
+    if (!d) return
+    setEditableText((prev) => ({
+      ...prev,
+      date: fromIsoDate(iso),
+      invoiceNumber: getInvoiceNumberForDate(d),
+    }))
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -253,7 +276,8 @@ const exportToPDF = async () => {
     }
   }
 
-  const fileName = `FACTURA DARWIN ELÉGIGA ${getCurrentMonthInvoiceName()}.pdf`
+  const selectedDateObj = isoToDate(selectedIsoDate) ?? new Date()
+  const fileName = `FACTURA DARWIN ELÉGIGA ${getInvoiceNameForDate(selectedDateObj)}.pdf`
   pdf.save(fileName)
   await saveInvoiceToHistory(pdf.output("blob"), fileName)
 }
@@ -478,6 +502,28 @@ const exportToPDFLightweight = () => {
                   {opt.label}
                 </label>
               ))}
+            </div>
+          </div>
+
+          {/* Fecha de la factura */}
+          <div className="mt-4 p-4 border rounded bg-gray-50 space-y-2">
+            <h3 className="font-semibold">Fecha de la factura</h3>
+            <p className="text-xs text-gray-500">
+              Por defecto se usa el último día del mes actual. Puedes seleccionar una fecha
+              de un mes pasado y el número de factura y el nombre del PDF se ajustarán al
+              mes/año elegido.
+            </p>
+            <div>
+              <Label htmlFor="invoice-date">Fecha</Label>
+              <Input
+                id="invoice-date"
+                type="date"
+                value={selectedIsoDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+              />
+            </div>
+            <div className="text-xs text-gray-600">
+              Número de factura: <span className="font-mono">{editableText.invoiceNumber}</span>
             </div>
           </div>
 
