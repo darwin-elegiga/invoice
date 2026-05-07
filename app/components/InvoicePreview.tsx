@@ -158,7 +158,18 @@ export function InvoicePreview({
                   <p className="mb-1">Plataforma: {editableText.paymentPlatform}</p>
                 )}
                 {editableText.paymentLink && (
-                  <p className="mb-1 break-all">Enlace: {editableText.paymentLink}</p>
+                  <p className="mb-1 break-all">
+                    Enlace:{" "}
+                    <a
+                      id="invoice-payment-link"
+                      href={editableText.paymentLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline"
+                    >
+                      {editableText.paymentLink}
+                    </a>
+                  </p>
                 )}
               </>
             )}

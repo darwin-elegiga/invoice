@@ -216,16 +216,43 @@ const exportToPDF = async () => {
 
   // Si la imagen es muy alta, ajustar para que quepa en una página
   const maxHeight = pdf.internal.pageSize.getHeight()
+  let mmPerPx: number
+  let xOffset: number
+  let yOffset: number
   if (pdfHeight > maxHeight) {
     const ratio = maxHeight / pdfHeight
     const adjustedWidth = pdfWidth * ratio
     const adjustedHeight = maxHeight
-    const xOffset = (pdfWidth - adjustedWidth) / 2
-    pdf.addImage(imgData, "JPEG", xOffset, 0, adjustedWidth, adjustedHeight)
+    xOffset = (pdfWidth - adjustedWidth) / 2
+    yOffset = 0
+    mmPerPx = adjustedWidth / content.getBoundingClientRect().width
+    pdf.addImage(imgData, "JPEG", xOffset, yOffset, adjustedWidth, adjustedHeight)
   } else {
+    xOffset = 0
+    yOffset = 0
+    mmPerPx = pdfWidth / content.getBoundingClientRect().width
     pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight)
   }
-  
+
+  // Superponer enlace clickeable sobre el "Enlace de pago" (si está visible)
+  if (paymentMethod === "enlace" && editableText.paymentLink) {
+    const linkEl = document.getElementById("invoice-payment-link")
+    if (linkEl) {
+      const contentRect = content.getBoundingClientRect()
+      const url = /^https?:\/\//i.test(editableText.paymentLink)
+        ? editableText.paymentLink
+        : `https://${editableText.paymentLink}`
+      const rects = linkEl.getClientRects()
+      for (const r of Array.from(rects)) {
+        const x = xOffset + (r.left - contentRect.left) * mmPerPx
+        const y = yOffset + (r.top - contentRect.top) * mmPerPx
+        const w = r.width * mmPerPx
+        const h = r.height * mmPerPx
+        pdf.link(x, y, w, h, { url })
+      }
+    }
+  }
+
   const fileName = `FACTURA DARWIN ELÉGIGA ${getCurrentMonthInvoiceName()}.pdf`
   pdf.save(fileName)
   await saveInvoiceToHistory(pdf.output("blob"), fileName)
