@@ -18,6 +18,11 @@ interface EditableTextProps {
   cardBrand: string
   paymentLink: string
   paymentPlatform: string
+  wuName: string
+  wuAddress: string
+  wuPostalCode: string
+  wuPassport: string
+  wuPhone: string
   address: string
   clientName: string
   clientId: string
@@ -26,7 +31,7 @@ interface EditableTextProps {
   date: string
 }
 
-type PaymentMethod = "transferencia" | "tarjeta" | "enlace"
+type PaymentMethod = "transferencia" | "tarjeta" | "enlace" | "western"
 
 export function InvoicePreview({
   items,
@@ -171,6 +176,18 @@ export function InvoicePreview({
                     </a>
                   </p>
                 )}
+              </>
+            )}
+            {paymentMethod === "western" && (
+              <>
+                <p className="mb-1">Forma de pago (Western Union)</p>
+                {editableText.wuName && <p className="mb-1">Nombre y apellidos: {editableText.wuName}</p>}
+                {editableText.wuAddress && <p className="mb-1">Dirección: {editableText.wuAddress}</p>}
+                {editableText.wuPostalCode && (
+                  <p className="mb-1">Código postal: {editableText.wuPostalCode}</p>
+                )}
+                {editableText.wuPassport && <p className="mb-1">Pasaporte: {editableText.wuPassport}</p>}
+                {editableText.wuPhone && <p className="mb-1">Teléfono: {editableText.wuPhone}</p>}
               </>
             )}
             <div className="border-t border-dotted border-black w-full my-4"></div>

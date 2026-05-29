@@ -41,15 +41,34 @@ const LINK_FIELDS = [
   { key: "paymentLink", label: "Enlace de pago" },
 ] as const
 
-const BANK_FIELDS = [...TRANSFER_FIELDS, ...CARD_FIELDS, ...LINK_FIELDS] as const
+const WESTERN_UNION_FIELDS = [
+  { key: "wuName", label: "Nombre y apellidos" },
+  { key: "wuAddress", label: "Dirección" },
+  { key: "wuPostalCode", label: "Código postal" },
+  { key: "wuPassport", label: "Pasaporte" },
+  { key: "wuPhone", label: "Número de teléfono" },
+] as const
 
-type PaymentMethod = "transferencia" | "tarjeta" | "enlace"
+const BANK_FIELDS = [...TRANSFER_FIELDS, ...CARD_FIELDS, ...LINK_FIELDS, ...WESTERN_UNION_FIELDS] as const
+
+type PaymentMethod = "transferencia" | "tarjeta" | "enlace" | "western"
 
 const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
   { value: "transferencia", label: "Transferencia internacional" },
   { value: "tarjeta", label: "Tarjeta" },
   { value: "enlace", label: "Enlace de pago" },
+  { value: "western", label: "Western Union" },
 ]
+
+const PAYMENT_METHOD_SECTIONS: Record<
+  PaymentMethod,
+  { title: string; fields: readonly { key: string; label: string }[] }
+> = {
+  transferencia: { title: "Transferencia internacional", fields: TRANSFER_FIELDS },
+  tarjeta: { title: "Tarjeta", fields: CARD_FIELDS },
+  enlace: { title: "Enlace de pago", fields: LINK_FIELDS },
+  western: { title: "Western Union", fields: WESTERN_UNION_FIELDS },
+}
 
 
 interface InvoiceItem {
@@ -78,6 +97,11 @@ export default function InvoiceGenerator() {
     cardBrand: "",
     paymentLink: "",
     paymentPlatform: "",
+    wuName: "",
+    wuAddress: "",
+    wuPostalCode: "",
+    wuPassport: "",
+    wuPhone: "",
     address:
       "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 409,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
     clientName: "Darwin Alejandro Elégiga López",
@@ -419,7 +443,7 @@ const exportToPDFLightweight = () => {
     if (editableText.cardLast4) {
       pdf.text(`Tarjeta: **** **** **** ${editableText.cardLast4}`, margin, yPos)
     }
-  } else {
+  } else if (paymentMethod === "enlace") {
     pdf.text("Forma de pago (Enlace de pago)", margin, yPos)
     yPos += 7
     if (editableText.paymentPlatform) {
@@ -428,6 +452,28 @@ const exportToPDFLightweight = () => {
     }
     if (editableText.paymentLink) {
       pdf.text(`Enlace: ${editableText.paymentLink}`, margin, yPos)
+    }
+  } else {
+    pdf.text("Forma de pago (Western Union)", margin, yPos)
+    yPos += 7
+    if (editableText.wuName) {
+      pdf.text(`Nombre y apellidos: ${editableText.wuName}`, margin, yPos)
+      yPos += 7
+    }
+    if (editableText.wuAddress) {
+      pdf.text(`Dirección: ${editableText.wuAddress}`, margin, yPos)
+      yPos += 7
+    }
+    if (editableText.wuPostalCode) {
+      pdf.text(`Código postal: ${editableText.wuPostalCode}`, margin, yPos)
+      yPos += 7
+    }
+    if (editableText.wuPassport) {
+      pdf.text(`Pasaporte: ${editableText.wuPassport}`, margin, yPos)
+      yPos += 7
+    }
+    if (editableText.wuPhone) {
+      pdf.text(`Teléfono: ${editableText.wuPhone}`, margin, yPos)
     }
   }
   yPos += 10
@@ -571,11 +617,7 @@ const exportToPDFLightweight = () => {
               </span>
             </CollapsibleTrigger>
             <CollapsibleContent className="px-4 pb-4 space-y-4">
-              {[
-                { title: "Transferencia internacional", fields: TRANSFER_FIELDS },
-                { title: "Tarjeta", fields: CARD_FIELDS },
-                { title: "Enlace de pago", fields: LINK_FIELDS },
-              ].map(({ title, fields }) => (
+              {[PAYMENT_METHOD_SECTIONS[paymentMethod]].map(({ title, fields }) => (
                 <div key={title} className="space-y-2">
                   <h4 className="text-sm font-semibold text-gray-700">{title}</h4>
                   {fields.map(({ key, label }) => {

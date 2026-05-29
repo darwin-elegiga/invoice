@@ -16,6 +16,11 @@ const FIELDS = [
   "cardBrand",
   "paymentLink",
   "paymentPlatform",
+  "wuName",
+  "wuAddress",
+  "wuPostalCode",
+  "wuPassport",
+  "wuPhone",
 ] as const
 
 type BankInfo = Record<(typeof FIELDS)[number], string>
@@ -32,6 +37,11 @@ const DEFAULTS: BankInfo = {
   cardBrand: "",
   paymentLink: "",
   paymentPlatform: "",
+  wuName: "",
+  wuAddress: "",
+  wuPostalCode: "",
+  wuPassport: "",
+  wuPhone: "",
 }
 
 function withDefaults(stored: Partial<BankInfo> | null): BankInfo {
