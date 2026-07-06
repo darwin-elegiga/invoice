@@ -20,6 +20,7 @@ import {
   toIsoDate,
 } from "./utils/date-utils"
 import { parseFlexibleNumber, formatEsNumber, formatEsNumberString } from "./utils/number-utils"
+import { getWorkdaySuggestion, HOURS_PER_DAY } from "./utils/workdays"
 import html2canvas from "html2canvas"
 
 const TRANSFER_FIELDS = [
@@ -127,6 +128,38 @@ export default function InvoiceGenerator() {
   const [bankDraft, setBankDraft] = useState<Record<string, string>>({})
   const [bankSaveStatus, setBankSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [selectedIsoDate, setSelectedIsoDate] = useState<string>(() => getLastDayIsoForDate())
+
+  // Sugerencia (no oficial) de días/horas trabajadas del mes facturado,
+  // según el calendario LYN 2026 (Madrid) + vacaciones de Darwin
+  const invoiceDateObj = isoToDate(selectedIsoDate)
+  const workdaySuggestion = invoiceDateObj
+    ? getWorkdaySuggestion(invoiceDateObj.getFullYear(), invoiceDateObj.getMonth())
+    : null
+  const suggestionMonthLabel = invoiceDateObj
+    ? getInvoiceNameForDate(invoiceDateObj).toLowerCase()
+    : ""
+  const shortDate = (iso: string) => {
+    const d = isoToDate(iso)
+    return d ? `${d.getDate()}/${d.getMonth() + 1}` : iso
+  }
+  const suggestionDetails: string[] = []
+  if (workdaySuggestion) {
+    if (workdaySuggestion.holidays.length > 0) {
+      suggestionDetails.push(
+        `Festivos: ${workdaySuggestion.holidays.map((h) => `${shortDate(h.date)} ${h.name}`).join(", ")}`,
+      )
+    }
+    if (workdaySuggestion.tentativeHolidays.length > 0) {
+      suggestionDetails.push(
+        `Por confirmar: ${workdaySuggestion.tentativeHolidays.map((h) => `${shortDate(h.date)} ${h.name}`).join(", ")}`,
+      )
+    }
+    if (workdaySuggestion.vacationDays.length > 0) {
+      suggestionDetails.push(
+        `Vacaciones: ${workdaySuggestion.vacationDays.map((v) => shortDate(v.date)).join(" y ")}`,
+      )
+    }
+  }
 
   useEffect(() => {
     const iso = getLastDayIsoForDate()
@@ -606,6 +639,44 @@ const exportToPDFLightweight = () => {
           {/* Resumen de pago (global) */}
           <div className="mt-4 p-4 border rounded bg-gray-50 space-y-2">
             <h3 className="font-semibold">Resumen de Pago</h3>
+            {workdaySuggestion && (
+              <div className="rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-800 space-y-1">
+                <div>
+                  💡 Sugerencia (no oficial) — {suggestionMonthLabel}:{" "}
+                  {workdaySuggestion.workdaysMin === workdaySuggestion.workdaysMax
+                    ? `${workdaySuggestion.workdaysMax} días laborables ≈ ${workdaySuggestion.hoursMax} h`
+                    : `${workdaySuggestion.workdaysMin}–${workdaySuggestion.workdaysMax} días laborables ≈ ${workdaySuggestion.hoursMin}–${workdaySuggestion.hoursMax} h`}{" "}
+                  ({HOURS_PER_DAY} h/día)
+                </div>
+                {suggestionDetails.length > 0 && (
+                  <div className="text-xs text-blue-700">{suggestionDetails.join(" · ")}</div>
+                )}
+                {!workdaySuggestion.hasData && (
+                  <div className="text-xs text-blue-700">
+                    Sin festivos ni vacaciones: no hay calendario cargado para{" "}
+                    {invoiceDateObj?.getFullYear()}.
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  {workdaySuggestion.hoursMin !== workdaySuggestion.hoursMax && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleUnitsChange(String(workdaySuggestion.hoursMin))}
+                    >
+                      Usar {workdaySuggestion.hoursMin} h
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleUnitsChange(String(workdaySuggestion.hoursMax))}
+                  >
+                    Usar {workdaySuggestion.hoursMax} h
+                  </Button>
+                </div>
+              </div>
+            )}
             <div>
               <Label htmlFor="invoice-units">Unidades</Label>
               <Input
