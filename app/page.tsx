@@ -112,6 +112,16 @@ export default function InvoiceGenerator() {
     date: getLastDayOfMonth(),
   })
 
+  // Alarmas de validación: el precio por hora rara vez pasa de 10 y nunca
+  // llega a 100; las unidades (horas trabajadas) rara vez bajan de 100.
+  const parsedUnits = parseFlexibleNumber(invoiceUnits)
+  const parsedPrice = parseFlexibleNumber(invoicePrice)
+  const priceError = !Number.isNaN(parsedPrice) && parsedPrice >= 100
+  const priceUnusual = !Number.isNaN(parsedPrice) && parsedPrice > 10 && parsedPrice < 100
+  const unitsUnusual = !Number.isNaN(parsedUnits) && parsedUnits > 0 && parsedUnits < 100
+  // Precio raro Y unidades raras a la vez: lo más probable es que estén intercambiados
+  const swapWarning = (priceError || priceUnusual) && unitsUnusual
+
   const [bankInfoLoaded, setBankInfoLoaded] = useState(false)
   const [bankEditMode, setBankEditMode] = useState(false)
   const [bankDraft, setBankDraft] = useState<Record<string, string>>({})
@@ -237,6 +247,25 @@ export default function InvoiceGenerator() {
   }
 
 const exportToPDF = async () => {
+  if (swapWarning || priceError || priceUnusual || unitsUnusual) {
+    const issues: string[] = []
+    if (swapWarning) {
+      issues.push(
+        `parece que Unidades (${invoiceUnits}) y Precio (${formatEsNumber(parsedPrice)} EUR) están intercambiados`,
+      )
+    } else {
+      if (priceError) {
+        issues.push(`el precio por hora (${formatEsNumber(parsedPrice)} EUR) nunca debería llegar a 100`)
+      } else if (priceUnusual) {
+        issues.push(`el precio por hora (${formatEsNumber(parsedPrice)} EUR) rara vez pasa de 10`)
+      }
+      if (unitsUnusual) {
+        issues.push(`las unidades (${invoiceUnits}) rara vez bajan de 100`)
+      }
+    }
+    const ok = window.confirm(`Aviso: ${issues.join(" y ")}. ¿Exportar de todos modos?`)
+    if (!ok) return
+  }
   const content = document.getElementById("invoice-preview")
   if (!content) return
 
@@ -583,6 +612,13 @@ const exportToPDFLightweight = () => {
                 id="invoice-units"
                 value={invoiceUnits}
                 onChange={(e) => handleUnitsChange(e.target.value)}
+                className={
+                  swapWarning
+                    ? "border-red-500 focus-visible:ring-red-500"
+                    : unitsUnusual
+                      ? "border-amber-500 focus-visible:ring-amber-500"
+                      : undefined
+                }
               />
             </div>
             <div>
@@ -591,8 +627,43 @@ const exportToPDFLightweight = () => {
                 id="invoice-price"
                 value={invoicePrice}
                 onChange={(e) => handlePriceChange(e.target.value)}
+                className={
+                  swapWarning || priceError
+                    ? "border-red-500 focus-visible:ring-red-500"
+                    : priceUnusual
+                      ? "border-amber-500 focus-visible:ring-amber-500"
+                      : undefined
+                }
               />
             </div>
+            {swapWarning ? (
+              <div className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+                ⚠️ Posible intercambio: el precio por hora ({formatEsNumber(parsedPrice)} EUR) es
+                inusualmente alto y las unidades ({invoiceUnits}) inusualmente bajas. Revisa si has
+                invertido Unidades y Precio.
+              </div>
+            ) : (
+              <>
+                {priceError && (
+                  <div className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+                    ⚠️ El precio por hora ({formatEsNumber(parsedPrice)} EUR) nunca debería llegar a
+                    100. Revísalo.
+                  </div>
+                )}
+                {priceUnusual && (
+                  <div className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-700">
+                    ⚠️ El precio por hora ({formatEsNumber(parsedPrice)} EUR) rara vez pasa de 10.
+                    Comprueba que es correcto.
+                  </div>
+                )}
+                {unitsUnusual && (
+                  <div className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-700">
+                    ⚠️ Las unidades ({invoiceUnits}) rara vez bajan de 100 horas. Comprueba que es
+                    correcto.
+                  </div>
+                )}
+              </>
+            )}
             <div>
               <Label htmlFor="invoice-total">Total</Label>
               <Input
