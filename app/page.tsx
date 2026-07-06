@@ -19,6 +19,7 @@ import {
   isoToDate,
   toIsoDate,
 } from "./utils/date-utils"
+import { parseFlexibleNumber, formatEsNumber, formatEsNumberString } from "./utils/number-utils"
 import html2canvas from "html2canvas"
 
 const TRANSFER_FIELDS = [
@@ -210,19 +211,19 @@ export default function InvoiceGenerator() {
 
   const handleUnitsChange = (value: string) => {
     setInvoiceUnits(value)
-    const units = parseFloat(value) || 0
-    const price = parseFloat(invoicePrice) || 0
+    const units = parseFlexibleNumber(value) || 0
+    const price = parseFlexibleNumber(invoicePrice) || 0
     if (units && price) {
-      setInvoiceTotal((units * price).toFixed(2))
+      setInvoiceTotal(formatEsNumber(units * price))
     }
   }
 
   const handlePriceChange = (value: string) => {
     setInvoicePrice(value)
-    const units = parseFloat(invoiceUnits) || 0
-    const price = parseFloat(value) || 0
+    const units = parseFlexibleNumber(invoiceUnits) || 0
+    const price = parseFlexibleNumber(value) || 0
     if (units && price) {
-      setInvoiceTotal((units * price).toFixed(2))
+      setInvoiceTotal(formatEsNumber(units * price))
     }
   }
 
@@ -407,8 +408,8 @@ const exportToPDFLightweight = () => {
   yPos += 7
 
   pdf.text(invoiceUnits, tableX, yPos)
-  if (invoicePrice) pdf.text(`${invoicePrice} EUR`, tableX + 25, yPos)
-  pdf.text(invoiceTotal ? `${invoiceTotal} EUR` : "", tableX + 55, yPos)
+  if (invoicePrice) pdf.text(`${formatEsNumberString(invoicePrice)} EUR`, tableX + 25, yPos)
+  pdf.text(invoiceTotal ? `${formatEsNumberString(invoiceTotal)} EUR` : "", tableX + 55, yPos)
   yPos += 7
 
   // Información de pago y total al final de la página
@@ -484,7 +485,7 @@ const exportToPDFLightweight = () => {
   yPos += 10
 
   pdf.setFontSize(12)
-  pdf.text(`TOTAL: ${invoiceTotal} EUR`, pageWidth - margin, yPos, { align: 'right' })
+  pdf.text(`TOTAL: ${formatEsNumberString(invoiceTotal)} EUR`, pageWidth - margin, yPos, { align: 'right' })
   pdf.save(`FACTURA DARWIN ELÉGIGA ${getCurrentMonthInvoiceNumber()}`)
 }
 

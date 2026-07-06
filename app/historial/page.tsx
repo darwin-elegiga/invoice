@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { formatEsNumberString } from "../utils/number-utils"
 
 type InvoiceRecord = {
   id: string
@@ -326,7 +327,7 @@ export default function HistorialPage() {
                     <TableCell>{r.invoiceNumber}</TableCell>
                     <TableCell>{r.clientName || "—"}</TableCell>
                     <TableCell className="text-right">
-                      {r.total ? `${r.total} EUR` : "—"}
+                      {r.total ? `${formatEsNumberString(r.total)} EUR` : "—"}
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <a

@@ -1,3 +1,4 @@
+import { formatEsNumberString } from "../utils/number-utils"
 
 interface InvoiceItem {
   description: string
@@ -122,8 +123,8 @@ export function InvoicePreview({
                 <tbody>
                   <tr>
                     <td className="py-2">{units}</td>
-                    {price && <td className="py-2">{price} EUR</td>}
-                    <td className="text-right py-2">{total ? `${total} EUR` : ""}</td>
+                    {price && <td className="py-2">{formatEsNumberString(price)} EUR</td>}
+                    <td className="text-right py-2">{total ? `${formatEsNumberString(total)} EUR` : ""}</td>
                   </tr>
                 </tbody>
               </table>
@@ -195,7 +196,7 @@ export function InvoicePreview({
 
           {/* Total */}
           <div className="text-right">
-            <p className="font-normal">TOTAL: {total ? `${total} EUR` : ""}</p>
+            <p className="font-normal">TOTAL: {total ? `${formatEsNumberString(total)} EUR` : ""}</p>
           </div>
         </div>
       </div>
