@@ -12,8 +12,6 @@ interface EditableTextProps {
   swiftBic: string
   beneficiary: string
   bankAccount: string
-  accountType: string
-  currency: string
   address: string
   clientName: string
   clientId: string
@@ -126,9 +124,7 @@ export function InvoicePreview({
             <p className="mb-1">Banco: {editableText.bankName}</p>
             <p className="mb-1">SWIFT/BIC: {editableText.swiftBic}</p>
             <p className="mb-1">Beneficiario: {editableText.beneficiary}</p>
-            <p className="mb-1">Número de cuenta: {editableText.bankAccount}</p>
-            <p className="mb-1">Tipo: {editableText.accountType}</p>
-            <p>Moneda de cuenta: {editableText.currency}</p>
+            <p>Número de cuenta: {editableText.bankAccount}</p>
             <div className="border-t border-dotted border-black w-full my-4"></div>
           </div>
 

@@ -15,8 +15,6 @@ interface EditableTextProps {
   swiftBic: string
   beneficiary: string
   bankAccount: string
-  accountType: string
-  currency: string
   address: string
   clientName: string
   clientId: string

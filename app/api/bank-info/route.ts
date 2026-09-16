@@ -9,8 +9,6 @@ const FIELDS = [
   "swiftBic",
   "beneficiary",
   "bankAccount",
-  "accountType",
-  "currency",
 ] as const
 
 type BankInfo = Record<(typeof FIELDS)[number], string>
@@ -20,8 +18,6 @@ const DEFAULTS: BankInfo = {
   swiftBic: "GEROCOBB",
   beneficiary: "DARWIN ALEJANDRO ELEGIGA LOPEZ",
   bankAccount: "00130390000200009106",
-  accountType: "Cuenta de ahorros",
-  currency: "COP",
 }
 
 function withDefaults(stored: Partial<BankInfo> | null): BankInfo {

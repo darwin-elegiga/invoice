@@ -29,8 +29,6 @@ const TRANSFER_FIELDS = [
   { key: "swiftBic", label: "SWIFT/BIC" },
   { key: "beneficiary", label: "Beneficiario" },
   { key: "bankAccount", label: "Número de cuenta" },
-  { key: "accountType", label: "Tipo" },
-  { key: "currency", label: "Moneda de cuenta" },
 ] as const
 
 interface InvoiceItem {
@@ -51,8 +49,6 @@ export default function InvoiceGenerator() {
     swiftBic: "GEROCOBB",
     beneficiary: "DARWIN ALEJANDRO ELEGIGA LOPEZ",
     bankAccount: "00130390000200009106",
-    accountType: "Cuenta de ahorros",
-    currency: "COP",
     address:
       "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 409,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
     clientName: "Darwin Alejandro Elégiga López",
@@ -409,10 +405,6 @@ const exportToPDFLightweight = () => {
   pdf.text(`Beneficiario: ${editableText.beneficiary}`, margin, yPos)
   yPos += 7
   pdf.text(`Número de cuenta: ${editableText.bankAccount}`, margin, yPos)
-  yPos += 7
-  pdf.text(`Tipo: ${editableText.accountType}`, margin, yPos)
-  yPos += 7
-  pdf.text(`Moneda de cuenta: ${editableText.currency}`, margin, yPos)
   yPos += 10
 
   pdf.setLineDashPattern([2, 2], 0)

@@ -2,7 +2,5 @@
   "bankName": "BBVA Colombia",
   "swiftBic": "GEROCOBB",
   "beneficiary": "DARWIN ALEJANDRO ELEGIGA LOPEZ",
-  "bankAccount": "00130390000200009106",
-  "accountType": "Cuenta de ahorros",
-  "currency": "COP"
+  "bankAccount": "00130390000200009106"
 }
