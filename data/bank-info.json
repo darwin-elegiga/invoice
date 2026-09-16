@@ -1,13 +1,8 @@
 {
-  "bankName": "BBVA Perú",
-  "swiftBic": "BCONPEPL",
-  "beneficiary": "Grisel Rosabal Safontsnnnnn",
-  "bankAccount": "0011-0814-0291745585",
-  "cci": "011-814-000291745585-15",
-  "bankAddress": "Calle 4 Nro 110, Dpto 4A, 15088, Lima, Perú",
-  "cardHolder": "",
-  "cardLast4": "",
-  "cardBrand": "",
-  "paymentLink": "",
-  "paymentPlatform": ""
+  "bankName": "BBVA Colombia",
+  "swiftBic": "GEROCOBB",
+  "beneficiary": "DARWIN ALEJANDRO ELEGIGA LOPEZ",
+  "bankAccount": "00130390000200009106",
+  "accountType": "Cuenta de ahorros",
+  "currency": "COP"
 }

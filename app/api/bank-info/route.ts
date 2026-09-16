@@ -9,39 +9,19 @@ const FIELDS = [
   "swiftBic",
   "beneficiary",
   "bankAccount",
-  "cci",
-  "bankAddress",
-  "cardHolder",
-  "cardLast4",
-  "cardBrand",
-  "paymentLink",
-  "paymentPlatform",
-  "wuName",
-  "wuAddress",
-  "wuPostalCode",
-  "wuPassport",
-  "wuPhone",
+  "accountType",
+  "currency",
 ] as const
 
 type BankInfo = Record<(typeof FIELDS)[number], string>
 
 const DEFAULTS: BankInfo = {
-  bankName: "BBVA Perú",
-  swiftBic: "BCONPEPL",
-  beneficiary: "Grisel Rosabal Safonts",
-  bankAccount: "0011-0814-0291745585",
-  cci: "011-814-000291745585-15",
-  bankAddress: "Calle 4 Nro 110, Dpto 4A, 15088, Lima, Perú",
-  cardHolder: "",
-  cardLast4: "",
-  cardBrand: "",
-  paymentLink: "",
-  paymentPlatform: "",
-  wuName: "",
-  wuAddress: "",
-  wuPostalCode: "",
-  wuPassport: "",
-  wuPhone: "",
+  bankName: "BBVA Colombia",
+  swiftBic: "GEROCOBB",
+  beneficiary: "DARWIN ALEJANDRO ELEGIGA LOPEZ",
+  bankAccount: "00130390000200009106",
+  accountType: "Cuenta de ahorros",
+  currency: "COP",
 }
 
 function withDefaults(stored: Partial<BankInfo> | null): BankInfo {

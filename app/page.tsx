@@ -23,55 +23,15 @@ import { parseFlexibleNumber, formatEsNumber, formatEsNumberString } from "./uti
 import { getWorkdaySuggestion, HOURS_PER_DAY } from "./utils/workdays"
 import html2canvas from "html2canvas"
 
+// Única forma de pago: transferencia bancaria internacional
 const TRANSFER_FIELDS = [
   { key: "bankName", label: "Banco" },
   { key: "swiftBic", label: "SWIFT/BIC" },
   { key: "beneficiary", label: "Beneficiario" },
-  { key: "bankAccount", label: "Cuenta" },
-  { key: "cci", label: "CCI" },
-  { key: "bankAddress", label: "Dirección" },
+  { key: "bankAccount", label: "Número de cuenta" },
+  { key: "accountType", label: "Tipo" },
+  { key: "currency", label: "Moneda de cuenta" },
 ] as const
-
-const CARD_FIELDS = [
-  { key: "cardHolder", label: "Titular" },
-  { key: "cardLast4", label: "Últimos 4 dígitos" },
-  { key: "cardBrand", label: "Marca (Visa, Mastercard…)" },
-] as const
-
-const LINK_FIELDS = [
-  { key: "paymentPlatform", label: "Plataforma (Stripe, PayPal…)" },
-  { key: "paymentLink", label: "Enlace de pago" },
-] as const
-
-const WESTERN_UNION_FIELDS = [
-  { key: "wuName", label: "Nombre y apellidos" },
-  { key: "wuAddress", label: "Dirección" },
-  { key: "wuPostalCode", label: "Código postal" },
-  { key: "wuPassport", label: "Pasaporte" },
-  { key: "wuPhone", label: "Número de teléfono" },
-] as const
-
-const BANK_FIELDS = [...TRANSFER_FIELDS, ...CARD_FIELDS, ...LINK_FIELDS, ...WESTERN_UNION_FIELDS] as const
-
-type PaymentMethod = "transferencia" | "tarjeta" | "enlace" | "western"
-
-const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
-  { value: "transferencia", label: "Transferencia internacional" },
-  { value: "tarjeta", label: "Tarjeta" },
-  { value: "enlace", label: "Enlace de pago" },
-  { value: "western", label: "Western Union" },
-]
-
-const PAYMENT_METHOD_SECTIONS: Record<
-  PaymentMethod,
-  { title: string; fields: readonly { key: string; label: string }[] }
-> = {
-  transferencia: { title: "Transferencia internacional", fields: TRANSFER_FIELDS },
-  tarjeta: { title: "Tarjeta", fields: CARD_FIELDS },
-  enlace: { title: "Enlace de pago", fields: LINK_FIELDS },
-  western: { title: "Western Union", fields: WESTERN_UNION_FIELDS },
-}
-
 
 interface InvoiceItem {
   description: string
@@ -83,27 +43,16 @@ export default function InvoiceGenerator() {
   const [invoiceUnits, setInvoiceUnits] = useState("")
   const [invoicePrice, setInvoicePrice] = useState("")
   const [invoiceTotal, setInvoiceTotal] = useState("")
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("transferencia")
 
   const [editableText, setEditableText] = useState({
     companyName: "LYN Soluciones Tecnológicas S.L",
     nif: "B72652290",
-    bankName: "BBVA Perú",
-    swiftBic: "BCONPEPL",
-    beneficiary: "Grisel Rosabal Safonts",
-    bankAccount: "0011-0814-0291745585",
-    cci: "011-814-000291745585-15",
-    bankAddress: "Calle 4 Nro 110, Dpto 4A, 15088, Lima, Perú",
-    cardHolder: "",
-    cardLast4: "",
-    cardBrand: "",
-    paymentLink: "",
-    paymentPlatform: "",
-    wuName: "",
-    wuAddress: "",
-    wuPostalCode: "",
-    wuPassport: "",
-    wuPhone: "",
+    bankName: "BBVA Colombia",
+    swiftBic: "GEROCOBB",
+    beneficiary: "DARWIN ALEJANDRO ELEGIGA LOPEZ",
+    bankAccount: "00130390000200009106",
+    accountType: "Cuenta de ahorros",
+    currency: "COP",
     address:
       "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 409,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
     clientName: "Darwin Alejandro Elégiga López",
@@ -206,7 +155,7 @@ export default function InvoiceGenerator() {
   const startBankEdit = () => {
     setBankDraft(
       Object.fromEntries(
-        BANK_FIELDS.map(({ key }) => [key, (editableText as Record<string, string>)[key]]),
+        TRANSFER_FIELDS.map(({ key }) => [key, (editableText as Record<string, string>)[key]]),
       ),
     )
     setBankSaveStatus("idle")
@@ -326,41 +275,14 @@ const exportToPDF = async () => {
 
   // Si la imagen es muy alta, ajustar para que quepa en una página
   const maxHeight = pdf.internal.pageSize.getHeight()
-  let mmPerPx: number
-  let xOffset: number
-  let yOffset: number
   if (pdfHeight > maxHeight) {
     const ratio = maxHeight / pdfHeight
     const adjustedWidth = pdfWidth * ratio
     const adjustedHeight = maxHeight
-    xOffset = (pdfWidth - adjustedWidth) / 2
-    yOffset = 0
-    mmPerPx = adjustedWidth / content.getBoundingClientRect().width
-    pdf.addImage(imgData, "JPEG", xOffset, yOffset, adjustedWidth, adjustedHeight)
+    const xOffset = (pdfWidth - adjustedWidth) / 2
+    pdf.addImage(imgData, "JPEG", xOffset, 0, adjustedWidth, adjustedHeight)
   } else {
-    xOffset = 0
-    yOffset = 0
-    mmPerPx = pdfWidth / content.getBoundingClientRect().width
     pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight)
-  }
-
-  // Superponer enlace clickeable sobre el "Enlace de pago" (si está visible)
-  if (paymentMethod === "enlace" && editableText.paymentLink) {
-    const linkEl = document.getElementById("invoice-payment-link")
-    if (linkEl) {
-      const contentRect = content.getBoundingClientRect()
-      const url = /^https?:\/\//i.test(editableText.paymentLink)
-        ? editableText.paymentLink
-        : `https://${editableText.paymentLink}`
-      const rects = linkEl.getClientRects()
-      for (const r of Array.from(rects)) {
-        const x = xOffset + (r.left - contentRect.left) * mmPerPx
-        const y = yOffset + (r.top - contentRect.top) * mmPerPx
-        const w = r.width * mmPerPx
-        const h = r.height * mmPerPx
-        pdf.link(x, y, w, h, { url })
-      }
-    }
   }
 
   const selectedDateObj = isoToDate(selectedIsoDate) ?? new Date()
@@ -478,67 +400,19 @@ const exportToPDFLightweight = () => {
   yPos = pageHeight - 40
 
   pdf.setFontSize(10)
-  if (paymentMethod === "transferencia") {
-    pdf.text("Forma de pago (Transferencia Internacional)", margin, yPos)
-    yPos += 7
-    pdf.text(`Banco: ${editableText.bankName}`, margin, yPos)
-    yPos += 7
-    pdf.text(`SWIFT/BIC: ${editableText.swiftBic}`, margin, yPos)
-    yPos += 7
-    pdf.text(`Beneficiario: ${editableText.beneficiary}`, margin, yPos)
-    yPos += 7
-    pdf.text(`Cuenta: ${editableText.bankAccount}`, margin, yPos)
-    yPos += 7
-    pdf.text(`CCI: ${editableText.cci}`, margin, yPos)
-    yPos += 7
-    pdf.text(`Dirección: ${editableText.bankAddress}`, margin, yPos)
-  } else if (paymentMethod === "tarjeta") {
-    pdf.text("Forma de pago (Tarjeta)", margin, yPos)
-    yPos += 7
-    if (editableText.cardBrand) {
-      pdf.text(`Marca: ${editableText.cardBrand}`, margin, yPos)
-      yPos += 7
-    }
-    if (editableText.cardHolder) {
-      pdf.text(`Titular: ${editableText.cardHolder}`, margin, yPos)
-      yPos += 7
-    }
-    if (editableText.cardLast4) {
-      pdf.text(`Tarjeta: **** **** **** ${editableText.cardLast4}`, margin, yPos)
-    }
-  } else if (paymentMethod === "enlace") {
-    pdf.text("Forma de pago (Enlace de pago)", margin, yPos)
-    yPos += 7
-    if (editableText.paymentPlatform) {
-      pdf.text(`Plataforma: ${editableText.paymentPlatform}`, margin, yPos)
-      yPos += 7
-    }
-    if (editableText.paymentLink) {
-      pdf.text(`Enlace: ${editableText.paymentLink}`, margin, yPos)
-    }
-  } else {
-    pdf.text("Forma de pago (Western Union)", margin, yPos)
-    yPos += 7
-    if (editableText.wuName) {
-      pdf.text(`Nombre y apellidos: ${editableText.wuName}`, margin, yPos)
-      yPos += 7
-    }
-    if (editableText.wuAddress) {
-      pdf.text(`Dirección: ${editableText.wuAddress}`, margin, yPos)
-      yPos += 7
-    }
-    if (editableText.wuPostalCode) {
-      pdf.text(`Código postal: ${editableText.wuPostalCode}`, margin, yPos)
-      yPos += 7
-    }
-    if (editableText.wuPassport) {
-      pdf.text(`Pasaporte: ${editableText.wuPassport}`, margin, yPos)
-      yPos += 7
-    }
-    if (editableText.wuPhone) {
-      pdf.text(`Teléfono: ${editableText.wuPhone}`, margin, yPos)
-    }
-  }
+  pdf.text("Forma de pago (Transferencia Internacional)", margin, yPos)
+  yPos += 7
+  pdf.text(`Banco: ${editableText.bankName}`, margin, yPos)
+  yPos += 7
+  pdf.text(`SWIFT/BIC: ${editableText.swiftBic}`, margin, yPos)
+  yPos += 7
+  pdf.text(`Beneficiario: ${editableText.beneficiary}`, margin, yPos)
+  yPos += 7
+  pdf.text(`Número de cuenta: ${editableText.bankAccount}`, margin, yPos)
+  yPos += 7
+  pdf.text(`Tipo: ${editableText.accountType}`, margin, yPos)
+  yPos += 7
+  pdf.text(`Moneda de cuenta: ${editableText.currency}`, margin, yPos)
   yPos += 10
 
   pdf.setLineDashPattern([2, 2], 0)
@@ -593,25 +467,6 @@ const exportToPDFLightweight = () => {
             <Button onClick={addItem} className="w-full">
               <PlusCircle className="mr-2 h-4 w-4" /> Agregar Item
             </Button>
-          </div>
-
-          {/* Método de pago */}
-          <div className="mt-4 p-4 border rounded bg-gray-50 space-y-2">
-            <h3 className="font-semibold">Método de Pago</h3>
-            <div className="flex flex-wrap gap-3">
-              {PAYMENT_METHOD_OPTIONS.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="payment-method"
-                    value={opt.value}
-                    checked={paymentMethod === opt.value}
-                    onChange={() => setPaymentMethod(opt.value)}
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
           </div>
 
           {/* Fecha de la factura */}
@@ -760,27 +615,25 @@ const exportToPDFLightweight = () => {
               </span>
             </CollapsibleTrigger>
             <CollapsibleContent className="px-4 pb-4 space-y-4">
-              {[PAYMENT_METHOD_SECTIONS[paymentMethod]].map(({ title, fields }) => (
-                <div key={title} className="space-y-2">
-                  <h4 className="text-sm font-semibold text-gray-700">{title}</h4>
-                  {fields.map(({ key, label }) => {
-                    const value = bankEditMode
-                      ? bankDraft[key] ?? ""
-                      : (editableText as Record<string, string>)[key]
-                    return (
-                      <div key={key}>
-                        <Label htmlFor={`bank-${key}`}>{label}</Label>
-                        <Input
-                          id={`bank-${key}`}
-                          value={value}
-                          disabled={!bankEditMode}
-                          onChange={(e) => handleBankDraftChange(key, e.target.value)}
-                        />
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-gray-700">Transferencia internacional</h4>
+                {TRANSFER_FIELDS.map(({ key, label }) => {
+                  const value = bankEditMode
+                    ? bankDraft[key] ?? ""
+                    : (editableText as Record<string, string>)[key]
+                  return (
+                    <div key={key}>
+                      <Label htmlFor={`bank-${key}`}>{label}</Label>
+                      <Input
+                        id={`bank-${key}`}
+                        value={value}
+                        disabled={!bankEditMode}
+                        onChange={(e) => handleBankDraftChange(key, e.target.value)}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
               <div className="flex gap-2 pt-2">
                 {bankEditMode ? (
                   <>
@@ -815,7 +668,6 @@ const exportToPDFLightweight = () => {
             price={invoicePrice}
             total={invoiceTotal}
             editableText={editableText}
-            paymentMethod={paymentMethod}
             onEditableTextChange={handleEditableTextChange}
           />
         </div>
