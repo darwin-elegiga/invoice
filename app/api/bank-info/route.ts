@@ -17,7 +17,7 @@ const DEFAULTS: BankInfo = {
   bankName: "BBVA Colombia",
   swiftBic: "GEROCOBB",
   beneficiary: "DARWIN ALEJANDRO ELEGIGA LOPEZ",
-  bankAccount: "00130390000200009106",
+  bankAccount: "0390009106",
 }
 
 function withDefaults(stored: Partial<BankInfo> | null): BankInfo {

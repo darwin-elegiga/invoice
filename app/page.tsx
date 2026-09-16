@@ -48,7 +48,7 @@ export default function InvoiceGenerator() {
     bankName: "BBVA Colombia",
     swiftBic: "GEROCOBB",
     beneficiary: "DARWIN ALEJANDRO ELEGIGA LOPEZ",
-    bankAccount: "00130390000200009106",
+    bankAccount: "0390009106",
     address:
       "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 409,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
     clientName: "Darwin Alejandro Elégiga López",
@@ -396,7 +396,7 @@ const exportToPDFLightweight = () => {
   yPos = pageHeight - 40
 
   pdf.setFontSize(10)
-  pdf.text("Forma de pago (Transferencia Internacional)", margin, yPos)
+  pdf.text("Transferencia bancaria", margin, yPos)
   yPos += 7
   pdf.text(`Banco: ${editableText.bankName}`, margin, yPos)
   yPos += 7
@@ -608,7 +608,7 @@ const exportToPDFLightweight = () => {
             </CollapsibleTrigger>
             <CollapsibleContent className="px-4 pb-4 space-y-4">
               <div className="space-y-2">
-                <h4 className="text-sm font-semibold text-gray-700">Transferencia internacional</h4>
+                <h4 className="text-sm font-semibold text-gray-700">Transferencia bancaria</h4>
                 {TRANSFER_FIELDS.map(({ key, label }) => {
                   const value = bankEditMode
                     ? bankDraft[key] ?? ""

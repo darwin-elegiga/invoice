@@ -120,7 +120,7 @@ export function InvoicePreview({
         <div className="mt-auto">
           <div className="mb-8">
             <div className="border-t border-dotted border-black w-full my-4"></div>
-            <p className="mb-1">Forma de pago (Transferencia Internacional)</p>
+            <p className="mb-1">Transferencia bancaria</p>
             <p className="mb-1">Banco: {editableText.bankName}</p>
             <p className="mb-1">SWIFT/BIC: {editableText.swiftBic}</p>
             <p className="mb-1">Beneficiario: {editableText.beneficiary}</p>
