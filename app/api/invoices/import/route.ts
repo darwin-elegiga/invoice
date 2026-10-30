@@ -1,79 +1,33 @@
 import { NextResponse } from "next/server"
-import { redis, KV_KEYS } from "@/lib/storage"
+import { FILE_TYPES, INVOICE_RECIPIENT, cleanItems, listInvoices, saveInvoice, type FileType } from "@/lib/invoices"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-type InvoiceRecord = {
+type ImportedRecord = {
   id: string
   invoiceNumber: string
   date: string
-  year: number
-  month: number
-  total: string
-  clientName: string
-  notes: string
   fileName: string
-  blobUrl: string
-  blobPath: string
-  uploadedAt: string
+  [k: string]: unknown
 }
 
-const REQUIRED_KEYS: (keyof InvoiceRecord)[] = [
-  "id", "invoiceNumber", "date", "year", "month", "fileName",
-]
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function isValidRecord(value: unknown): value is Partial<InvoiceRecord> & {
-  id: string
-  invoiceNumber: string
-  date: string
-  year: number
-  month: number
-  fileName: string
-} {
+function isValidRecord(value: unknown): value is ImportedRecord {
   if (!value || typeof value !== "object") return false
   const r = value as Record<string, unknown>
-  for (const k of REQUIRED_KEYS) {
-    if (!(k in r)) return false
-  }
   return (
     typeof r.id === "string" &&
+    UUID_RE.test(r.id) &&
     typeof r.invoiceNumber === "string" &&
     typeof r.date === "string" &&
-    typeof r.year === "number" &&
-    typeof r.month === "number" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(r.date) &&
     typeof r.fileName === "string"
   )
 }
 
-function normalize(r: Partial<InvoiceRecord> & {
-  id: string
-  invoiceNumber: string
-  date: string
-  year: number
-  month: number
-  fileName: string
-}): InvoiceRecord {
-  return {
-    id: r.id,
-    invoiceNumber: r.invoiceNumber,
-    date: r.date,
-    year: r.year,
-    month: r.month,
-    total: r.total ?? "",
-    clientName: r.clientName ?? "",
-    notes: r.notes ?? "",
-    fileName: r.fileName,
-    blobUrl: r.blobUrl ?? "",
-    blobPath: r.blobPath ?? "",
-    uploadedAt: r.uploadedAt ?? new Date().toISOString(),
-  }
-}
-
-async function readIndex(): Promise<InvoiceRecord[]> {
-  const stored = await redis.get<InvoiceRecord[]>(KV_KEYS.invoices)
-  return Array.isArray(stored) ? stored : []
-}
+const str = (v: unknown) => (typeof v === "string" ? v : "")
 
 export async function POST(request: Request) {
   let body: unknown
@@ -86,30 +40,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Expected an array of records" }, { status: 400 })
   }
 
-  const incoming: InvoiceRecord[] = []
-  const skipped: unknown[] = []
-  for (const item of body) {
-    if (isValidRecord(item)) incoming.push(normalize(item))
-    else skipped.push(item)
-  }
-
-  const current = await readIndex()
-  const byId = new Map<string, InvoiceRecord>()
-  for (const r of current) byId.set(r.id, r)
+  const existingIds = new Set((await listInvoices()).map((r) => r.id))
   let added = 0
   let updated = 0
-  for (const r of incoming) {
-    if (byId.has(r.id)) updated++
+  let skipped = 0
+  for (const item of body) {
+    if (!isValidRecord(item)) {
+      skipped++
+      continue
+    }
+    const fileType: FileType = item.fileType === "xlsx" ? "xlsx" : "pdf"
+    await saveInvoice(
+      {
+        id: item.id,
+        invoiceNumber: item.invoiceNumber,
+        date: item.date,
+        total: str(item.total),
+        clientName: str(item.clientName) || INVOICE_RECIPIENT,
+        notes: str(item.notes),
+        paymentMethod: str(item.paymentMethod),
+        fileType: fileType in FILE_TYPES ? fileType : "pdf",
+        fileName: item.fileName,
+        blobUrl: str(item.blobUrl),
+        blobPath: str(item.blobPath),
+        uploadedAt: str(item.uploadedAt) || new Date().toISOString(),
+        items: cleanItems(item.items),
+      },
+      // Re-importing a backup must not inflate the usage counters.
+      { updateCatalog: !existingIds.has(item.id) },
+    )
+    if (existingIds.has(item.id)) updated++
     else added++
-    byId.set(r.id, r)
   }
-  const merged = Array.from(byId.values())
-  await redis.set(KV_KEYS.invoices, merged)
 
   return NextResponse.json({
-    total: merged.length,
+    total: existingIds.size + added,
     added,
     updated,
-    skipped: skipped.length,
+    skipped,
   })
 }

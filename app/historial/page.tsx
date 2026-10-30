@@ -31,8 +31,23 @@ type InvoiceRecord = {
   total: string
   clientName: string
   notes: string
+  paymentMethod: string
+  fileType: "pdf" | "xlsx"
   fileName: string
   uploadedAt: string
+  items: { project: string; client: string }[]
+}
+
+type CatalogEntry = {
+  id: number
+  project: string
+  client: string
+  timesUsed: number
+}
+
+const FILE_LABELS: Record<InvoiceRecord["fileType"], string> = {
+  pdf: "Ver PDF",
+  xlsx: "Ver XLS",
 }
 
 const MONTHS = [
@@ -47,13 +62,16 @@ export default function HistorialPage() {
   const [loading, setLoading] = useState(true)
   const [yearFilter, setYearFilter] = useState<string>(ALL)
   const [monthFilter, setMonthFilter] = useState<string>(ALL)
+  const [clientFilter, setClientFilter] = useState<string>(ALL)
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([])
 
   const [file, setFile] = useState<File | null>(null)
   const [invoiceNumber, setInvoiceNumber] = useState("")
   const [date, setDate] = useState("")
   const [total, setTotal] = useState("")
-  const [clientName, setClientName] = useState("")
   const [notes, setNotes] = useState("")
+  const [project, setProject] = useState("")
+  const [projectClient, setProjectClient] = useState("")
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
@@ -67,8 +85,14 @@ export default function HistorialPage() {
     }
   }
 
+  const loadCatalog = async () => {
+    const res = await fetch("/api/catalog")
+    if (res.ok) setCatalog(await res.json())
+  }
+
   useEffect(() => {
     loadRecords()
+    loadCatalog()
   }, [])
 
   const years = useMemo(() => {
@@ -76,13 +100,25 @@ export default function HistorialPage() {
     return Array.from(set).sort((a, b) => b - a)
   }, [records])
 
+  const clients = useMemo(() => {
+    const set = new Set(records.flatMap((r) => r.items.map((i) => i.client)).filter(Boolean))
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"))
+  }, [records])
+
   const filtered = useMemo(() => {
     return records.filter((r) => {
       if (yearFilter !== ALL && String(r.year) !== yearFilter) return false
       if (monthFilter !== ALL && String(r.month) !== monthFilter) return false
+      if (clientFilter !== ALL && !r.items.some((i) => i.client === clientFilter)) return false
       return true
     })
-  }, [records, yearFilter, monthFilter])
+  }, [records, yearFilter, monthFilter, clientFilter])
+
+  const handleDeleteCatalogEntry = async (entry: CatalogEntry) => {
+    if (!confirm(`¿Dejar de sugerir «${entry.project} · ${entry.client}»?`)) return
+    const res = await fetch(`/api/catalog?id=${entry.id}`, { method: "DELETE" })
+    if (res.ok) setCatalog(await res.json())
+  }
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -100,8 +136,8 @@ export default function HistorialPage() {
     fd.append("invoiceNumber", invoiceNumber)
     fd.append("date", date)
     fd.append("total", total)
-    fd.append("clientName", clientName)
     fd.append("notes", notes)
+    fd.append("items", JSON.stringify([{ project, client: projectClient }]))
     setUploading(true)
     try {
       const res = await fetch("/api/invoices", { method: "POST", body: fd })
@@ -113,11 +149,12 @@ export default function HistorialPage() {
       setInvoiceNumber("")
       setDate("")
       setTotal("")
-      setClientName("")
       setNotes("")
+      setProject("")
+      setProjectClient("")
       const fileInput = document.getElementById("upload-file") as HTMLInputElement | null
       if (fileInput) fileInput.value = ""
-      await loadRecords()
+      await Promise.all([loadRecords(), loadCatalog()])
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Error al subir")
     } finally {
@@ -219,13 +256,39 @@ export default function HistorialPage() {
               />
             </div>
             <div>
-              <Label htmlFor="upload-client">Cliente</Label>
+              <Label htmlFor="upload-project">Proyecto</Label>
               <Input
-                id="upload-client"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
+                id="upload-project"
+                list="historial-projects"
+                autoComplete="off"
+                value={project}
+                onChange={(e) => {
+                  setProject(e.target.value)
+                  const match = catalog.find((c) => c.project === e.target.value)
+                  if (match && !projectClient) setProjectClient(match.client)
+                }}
               />
             </div>
+            <div>
+              <Label htmlFor="upload-project-client">Cliente del proyecto</Label>
+              <Input
+                id="upload-project-client"
+                list="historial-clients"
+                autoComplete="off"
+                value={projectClient}
+                onChange={(e) => setProjectClient(e.target.value)}
+              />
+            </div>
+            <datalist id="historial-projects">
+              {Array.from(new Set(catalog.map((c) => c.project))).map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
+            <datalist id="historial-clients">
+              {Array.from(new Set(catalog.map((c) => c.client))).map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
             <div>
               <Label htmlFor="upload-notes">Notas</Label>
               <Input
@@ -277,6 +340,22 @@ export default function HistorialPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="w-52">
+              <Label>Cliente</Label>
+              <Select value={clientFilter} onValueChange={setClientFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todos</SelectItem>
+                  {clients.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="text-sm text-gray-500">
               {loading ? "Cargando…" : `${filtered.length} de ${records.length}`}
             </div>
@@ -308,7 +387,7 @@ export default function HistorialPage() {
                 <TableRow>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Nº</TableHead>
-                  <TableHead>Cliente</TableHead>
+                  <TableHead>Proyectos</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -325,9 +404,21 @@ export default function HistorialPage() {
                   <TableRow key={r.id}>
                     <TableCell>{r.date}</TableCell>
                     <TableCell>{r.invoiceNumber}</TableCell>
-                    <TableCell>{r.clientName || "—"}</TableCell>
+                    <TableCell>
+                      {r.items.length > 0
+                        ? r.items.map((i, idx) => (
+                            <div key={idx}>
+                              {i.project || "—"}
+                              {i.client && <span className="text-gray-500"> · {i.client}</span>}
+                            </div>
+                          ))
+                        : r.notes || "—"}
+                    </TableCell>
                     <TableCell className="text-right">
                       {r.total ? `${formatEsNumberString(r.total)} EUR` : "—"}
+                      {r.paymentMethod && (
+                        <div className="text-xs text-gray-500">{r.paymentMethod}</div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <a
@@ -336,7 +427,7 @@ export default function HistorialPage() {
                         rel="noreferrer"
                         className="text-blue-600 hover:underline text-sm"
                       >
-                        Ver PDF
+                        {FILE_LABELS[r.fileType] ?? "Ver archivo"}
                       </a>
                       <button
                         onClick={() => handleDelete(r.id)}
@@ -349,6 +440,36 @@ export default function HistorialPage() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+
+          <div className="mt-6 p-4 border rounded bg-gray-50">
+            <h2 className="font-semibold mb-1">Proyectos y clientes guardados</h2>
+            <p className="text-xs text-gray-500 mb-3">
+              Se guardan solos al exportar una factura y aparecen como sugerencias en el
+              generador.
+            </p>
+            {catalog.length === 0 ? (
+              <p className="text-sm text-gray-500">Todavía no hay ninguno.</p>
+            ) : (
+              <ul className="divide-y">
+                {catalog.map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
+                    <span>
+                      {entry.project} <span className="text-gray-500">· {entry.client}</span>
+                      <span className="ml-2 text-xs text-gray-400">
+                        {entry.timesUsed} {entry.timesUsed === 1 ? "factura" : "facturas"}
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => handleDeleteCatalogEntry(entry)}
+                      className="text-red-600 hover:underline"
+                    >
+                      Quitar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </div>

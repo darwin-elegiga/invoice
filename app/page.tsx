@@ -4,11 +4,11 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import Link from "next/link"
 import { InvoicePreview } from "./components/InvoicePreview"
+import { PaymentMethodsPanel, type PaymentMethod } from "./components/PaymentMethodsPanel"
 import { jsPDF } from "jspdf"
-import { ChevronDown, PlusCircle } from "lucide-react"
+import { PlusCircle } from "lucide-react"
 import {
   getCurrentMonthInvoiceNumber,
   getInvoiceNameForDate,
@@ -23,18 +23,41 @@ import { parseFlexibleNumber, formatEsNumber, formatEsNumberString } from "./uti
 import { getWorkdaySuggestion, HOURS_PER_DAY } from "./utils/workdays"
 import html2canvas from "html2canvas"
 
-// Única forma de pago: transferencia bancaria internacional
-const TRANSFER_FIELDS = [
-  { key: "bankName", label: "Banco" },
-  { key: "swiftBic", label: "SWIFT/BIC" },
-  { key: "beneficiary", label: "Beneficiario" },
-  { key: "bankAccount", label: "Número de cuenta" },
-] as const
 
 interface InvoiceItem {
   description: string
   client: string
 }
+
+// Project/client pair already used in a past invoice (from /api/catalog)
+interface CatalogEntry {
+  id: number
+  project: string
+  client: string
+  timesUsed: number
+  lastUsedAt: string
+}
+
+const RECENT_CATALOG_LIMIT = 6
+
+interface DraftData {
+  items: InvoiceItem[]
+  invoiceUnits: string
+  invoicePrice: string
+  invoiceTotal: string
+  selectedIsoDate: string
+  editableText: Record<string, string>
+  paymentMethodId?: number | null
+}
+
+interface Draft {
+  invoiceNumber: string
+  data: DraftData
+  updatedAt: string
+}
+
+const formatDraftTime = (iso: string) =>
+  new Date(iso).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })
 
 export default function InvoiceGenerator() {
   const [items, setItems] = useState<InvoiceItem[]>([{ description: "", client: "" }])
@@ -45,10 +68,6 @@ export default function InvoiceGenerator() {
   const [editableText, setEditableText] = useState({
     companyName: "LYN Soluciones Tecnológicas S.L",
     nif: "B72652290",
-    bankName: "BBVA Colombia",
-    swiftBic: "GEROCOBB",
-    beneficiary: "DARWIN ALEJANDRO ELEGIGA LOPEZ",
-    bankAccount: "0390009106",
     address:
       "c/ Marie Curie 9-15, Edificio B-Bioma, 4ª planta, oficina 409,\n28521, Rivas Vaciamadrid,\nMADRID\nESPAÑA",
     clientName: "Darwin Alejandro Elégiga López",
@@ -68,10 +87,6 @@ export default function InvoiceGenerator() {
   // Precio raro Y unidades raras a la vez: lo más probable es que estén intercambiados
   const swapWarning = (priceError || priceUnusual) && unitsUnusual
 
-  const [bankInfoLoaded, setBankInfoLoaded] = useState(false)
-  const [bankEditMode, setBankEditMode] = useState(false)
-  const [bankDraft, setBankDraft] = useState<Record<string, string>>({})
-  const [bankSaveStatus, setBankSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [selectedIsoDate, setSelectedIsoDate] = useState<string>(() => getLastDayIsoForDate())
 
   // Sugerencia (no oficial) de días/horas trabajadas del mes facturado,
@@ -127,73 +142,169 @@ export default function InvoiceGenerator() {
     }))
   }
 
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
+  const [paymentMethodId, setPaymentMethodId] = useState<number | null>(null)
+  const selectedPaymentMethod = paymentMethods.find((m) => m.id === paymentMethodId) ?? null
+
   useEffect(() => {
-    let cancelled = false
-    fetch("/api/bank-info")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (cancelled || !data) return
-        setEditableText((prev) => ({ ...prev, ...data }))
+    fetch("/api/payment-methods")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: PaymentMethod[]) => {
+        if (!Array.isArray(data)) return
+        setPaymentMethods(data)
+        // Keep a method picked from a loaded draft; otherwise use the default
+        setPaymentMethodId((current) => current ?? (data.find((m) => m.isDefault) ?? data[0])?.id ?? null)
       })
       .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setBankInfoLoaded(true)
-      })
-    return () => {
-      cancelled = true
-    }
   }, [])
+
+  const [drafts, setDrafts] = useState<Draft[]>([])
+  const [draftStatus, setDraftStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [historyStatus, setHistoryStatus] = useState<
+    | { kind: "idle" | "saving" }
+    | { kind: "saved"; pairs: number; incomplete: number }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" })
+
+  const updateDrafts = (res: Response) =>
+    res.ok ? res.json().then((data) => setDrafts(Array.isArray(data) ? data : [])) : Promise.reject()
+
+  useEffect(() => {
+    fetch("/api/drafts").then(updateDrafts).catch(() => {})
+  }, [])
+
+  const saveDraft = async () => {
+    setDraftStatus("saving")
+    const data: DraftData = {
+      items,
+      invoiceUnits,
+      invoicePrice,
+      invoiceTotal,
+      selectedIsoDate,
+      editableText,
+      paymentMethodId,
+    }
+    try {
+      await fetch("/api/drafts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceNumber: editableText.invoiceNumber, data }),
+      }).then(updateDrafts)
+      setDraftStatus("saved")
+      loadCatalog()
+    } catch {
+      setDraftStatus("error")
+    }
+  }
+
+  const loadDraft = (draft: Draft) => {
+    const { data } = draft
+    setItems(data.items?.length ? data.items : [{ description: "", client: "" }])
+    setInvoiceUnits(data.invoiceUnits ?? "")
+    setInvoicePrice(data.invoicePrice ?? "")
+    setInvoiceTotal(data.invoiceTotal ?? "")
+    if (data.selectedIsoDate) setSelectedIsoDate(data.selectedIsoDate)
+    setPrefilledFrom(null)
+    setEditableText((prev) => ({ ...prev, ...data.editableText }))
+    if (data.paymentMethodId) setPaymentMethodId(data.paymentMethodId)
+    setDraftStatus("idle")
+  }
+
+  const discardDraft = async (invoiceNumber: string) => {
+    if (!window.confirm(`¿Descartar el borrador ${invoiceNumber}?`)) return
+    await fetch(`/api/drafts?invoiceNumber=${encodeURIComponent(invoiceNumber)}`, {
+      method: "DELETE",
+    })
+      .then(updateDrafts)
+      .catch(() => {})
+  }
+
+  // Project/client lines barely change month to month, so a fresh form starts
+  // with the lines of the latest finalized invoice
+  const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch("/api/invoices")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((records: { invoiceNumber: string; items?: { project: string; client: string }[] }[]) => {
+        const last = Array.isArray(records) ? records.find((r) => r.items?.length) : undefined
+        if (!last?.items) return
+        const lastItems = last.items.map((i) => ({ description: i.project, client: i.client }))
+        setItems((current) => {
+          if (current.some((i) => i.description || i.client)) return current
+          setPrefilledFrom(last.invoiceNumber)
+          return lastItems
+        })
+      })
+      .catch(() => {})
+  }, [])
+
+  const clearPrefilledItems = () => {
+    setItems([{ description: "", client: "" }])
+    setPrefilledFrom(null)
+  }
+
+  const emailSubject = `DARWIN ELÉGIGA ${getInvoiceNameForDate(invoiceDateObj ?? new Date())} Parte de horas y factura`
+  const [subjectCopied, setSubjectCopied] = useState(false)
+
+  const copyEmailSubject = async () => {
+    try {
+      await navigator.clipboard.writeText(emailSubject)
+      setSubjectCopied(true)
+      setTimeout(() => setSubjectCopied(false), 2000)
+    } catch {}
+  }
+
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([])
+
+  const loadCatalog = () =>
+    fetch("/api/catalog")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setCatalog(Array.isArray(data) ? data : []))
+      .catch(() => {})
+
+  useEffect(() => {
+    loadCatalog()
+  }, [])
+
+  // Catalog is sorted by last use, so the first match is the most recent
+  const catalogProjects = Array.from(new Set(catalog.map((e) => e.project)))
+  const catalogClients = Array.from(new Set(catalog.map((e) => e.client)))
+
+  const removeCatalogEntry = async (entry: CatalogEntry) => {
+    if (!window.confirm(`¿Quitar «${entry.project} · ${entry.client}» de guardados?`)) return
+    await fetch(`/api/catalog?id=${entry.id}`, { method: "DELETE" })
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => setCatalog(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }
+
+  const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+  const isEntryInItems = (entry: CatalogEntry) =>
+    items.some((i) => sameText(i.description, entry.project) && sameText(i.client, entry.client))
+
+  const applyCatalogEntry = (entry: CatalogEntry) => {
+    if (isEntryInItems(entry)) return
+    const filled = { description: entry.project, client: entry.client }
+    const emptyIndex = items.findIndex((i) => !i.description && !i.client)
+    if (emptyIndex === -1) {
+      setItems([...items, filled])
+    } else {
+      setItems(items.map((item, i) => (i === emptyIndex ? filled : item)))
+    }
+  }
 
   const handleEditableTextChange = (key: string, value: string) => {
     setEditableText((prev) => ({ ...prev, [key]: value }))
   }
 
-  const startBankEdit = () => {
-    setBankDraft(
-      Object.fromEntries(
-        TRANSFER_FIELDS.map(({ key }) => [key, (editableText as Record<string, string>)[key]]),
-      ),
-    )
-    setBankSaveStatus("idle")
-    setBankEditMode(true)
-  }
-
-  const cancelBankEdit = () => {
-    setBankDraft({})
-    setBankEditMode(false)
-    setBankSaveStatus("idle")
-  }
-
-  const saveBankEdit = async () => {
-    setBankSaveStatus("saving")
-    try {
-      const res = await fetch("/api/bank-info", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bankDraft),
-      })
-      if (!res.ok) throw new Error("save failed")
-      const saved = await res.json()
-      setEditableText((prev) => ({ ...prev, ...saved }))
-      setBankSaveStatus("saved")
-      setBankEditMode(false)
-      setBankDraft({})
-    } catch {
-      // Aun sin servidor disponible, aplicar cambios localmente para que la UI refleje la edición
-      setEditableText((prev) => ({ ...prev, ...bankDraft }))
-      setBankEditMode(false)
-      setBankDraft({})
-      setBankSaveStatus("error")
-    }
-  }
-
-  const handleBankDraftChange = (key: string, value: string) => {
-    setBankDraft((prev) => ({ ...prev, [key]: value }))
-  }
-
   const handleItemChange = (index: number, field: keyof InvoiceItem, value: string) => {
-    const newItems = [...items]
-    newItems[index][field] = value
+    const newItems = items.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    // Picking a known project fills in its client when none was typed yet
+    if (field === "description" && !newItems[index].client) {
+      const match = catalog.find((e) => e.project === value)
+      if (match) newItems[index].client = match.client
+    }
     setItems(newItems)
   }
 
@@ -290,21 +401,39 @@ const exportToPDF = async () => {
 const saveInvoiceToHistory = async (blob: Blob, fileName: string) => {
   const isoDate = toIsoDate(editableText.date)
   if (!isoDate) {
-    console.warn("No se pudo guardar en historial: fecha inválida", editableText.date)
+    setHistoryStatus({ kind: "error", message: `fecha inválida (${editableText.date})` })
     return
   }
+  const lines = items.map((i) => ({ project: i.description.trim(), client: i.client.trim() }))
   const fd = new FormData()
   fd.append("file", new File([blob], fileName, { type: "application/pdf" }))
   fd.append("invoiceNumber", editableText.invoiceNumber)
   fd.append("date", isoDate)
   fd.append("total", invoiceTotal)
-  fd.append("clientName", editableText.clientName)
   fd.append("notes", items.map((i) => i.description).filter(Boolean).join(" | "))
+  fd.append("items", JSON.stringify(lines))
+  fd.append("paymentMethod", selectedPaymentMethod?.name ?? "")
+  setHistoryStatus({ kind: "saving" })
   try {
     const res = await fetch("/api/invoices", { method: "POST", body: fd })
-    if (!res.ok) console.warn("Fallo al guardar en historial", await res.text())
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || `HTTP ${res.status}`)
+    }
+    setHistoryStatus({
+      kind: "saved",
+      pairs: lines.filter((l) => l.project && l.client).length,
+      incomplete: lines.filter((l) => !l.project !== !l.client).length,
+    })
+    loadCatalog()
+    // A finalized invoice no longer needs its draft
+    fetch(`/api/drafts?invoiceNumber=${encodeURIComponent(editableText.invoiceNumber)}`, {
+      method: "DELETE",
+    })
+      .then(updateDrafts)
+      .catch(() => {})
   } catch (err) {
-    console.warn("Fallo al guardar en historial", err)
+    setHistoryStatus({ kind: "error", message: err instanceof Error ? err.message : String(err) })
   }
 }
 
@@ -396,16 +525,15 @@ const exportToPDFLightweight = () => {
   yPos = pageHeight - 40
 
   pdf.setFontSize(10)
-  pdf.text("Transferencia bancaria", margin, yPos)
-  yPos += 7
-  pdf.text(`Banco: ${editableText.bankName}`, margin, yPos)
-  yPos += 7
-  pdf.text(`SWIFT/BIC: ${editableText.swiftBic}`, margin, yPos)
-  yPos += 7
-  pdf.text(`Beneficiario: ${editableText.beneficiary}`, margin, yPos)
-  yPos += 7
-  pdf.text(`Número de cuenta: ${editableText.bankAccount}`, margin, yPos)
-  yPos += 10
+  if (selectedPaymentMethod) {
+    pdf.text(selectedPaymentMethod.name, margin, yPos)
+    yPos += 7
+    selectedPaymentMethod.lines.forEach((line) => {
+      pdf.text(`${line.label}: ${line.value}`, margin, yPos)
+      yPos += 7
+    })
+  }
+  yPos += 3
 
   pdf.setLineDashPattern([2, 2], 0)
   pdf.line(margin, yPos, pageWidth - margin, yPos)
@@ -429,14 +557,96 @@ const exportToPDFLightweight = () => {
         <div>
           <h2 className="text-xl font-semibold mb-2">Entrada de Datos</h2>
           
+          {drafts.length > 0 && (
+            <div className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm space-y-2">
+              <div className="font-semibold text-amber-800">Borradores guardados</div>
+              {drafts.map((draft) => (
+                <div key={draft.invoiceNumber} className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono">{draft.invoiceNumber}</span>
+                  <span className="text-xs text-amber-700">
+                    guardado {formatDraftTime(draft.updatedAt)}
+                  </span>
+                  <span className="ml-auto flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => loadDraft(draft)}>
+                      Cargar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-600"
+                      onClick={() => discardDraft(draft.invoiceNumber)}
+                    >
+                      Descartar
+                    </Button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Items: Proyecto y Cliente */}
           <div className="space-y-4">
+            <datalist id="catalog-projects">
+              {catalogProjects.map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
+            <datalist id="catalog-clients">
+              {catalogClients.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            {prefilledFrom && (
+              <div className="flex flex-wrap items-center gap-2 rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-800">
+                <span>
+                  Líneas copiadas de la última factura (
+                  <span className="font-mono">{prefilledFrom}</span>).
+                </span>
+                <Button size="sm" variant="ghost" className="ml-auto" onClick={clearPrefilledItems}>
+                  Vaciar
+                </Button>
+              </div>
+            )}
+            {catalog.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs text-gray-500">Reutilizar proyecto y cliente:</div>
+                <div className="flex flex-wrap gap-2">
+                  {catalog.slice(0, RECENT_CATALOG_LIMIT).map((entry) => (
+                    <span key={entry.id} className="inline-flex">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-r-none disabled:opacity-60"
+                        disabled={isEntryInItems(entry)}
+                        title={isEntryInItems(entry) ? "Ya está en la factura" : undefined}
+                        onClick={() => applyCatalogEntry(entry)}
+                      >
+                        {isEntryInItems(entry) && "✓ "}
+                        {entry.project} · {entry.client}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-l-none border-l-0 px-2 text-gray-400 hover:text-red-600"
+                        title="Quitar de guardados"
+                        aria-label={`Quitar ${entry.project} · ${entry.client} de guardados`}
+                        onClick={() => removeCatalogEntry(entry)}
+                      >
+                        ×
+                      </Button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             {items.map((item, index) => (
               <div key={index} className="space-y-2 p-4 border rounded">
                 <div>
                   <Label htmlFor={`description-${index}`}>Proyecto</Label>
                   <Input
                     id={`description-${index}`}
+                    list="catalog-projects"
+                    autoComplete="off"
                     value={item.description}
                     onChange={(e) => handleItemChange(index, "description", e.target.value)}
                   />
@@ -445,6 +655,8 @@ const exportToPDFLightweight = () => {
                   <Label htmlFor={`client-${index}`}>Cliente</Label>
                   <Input
                     id={`client-${index}`}
+                    list="catalog-clients"
+                    autoComplete="off"
                     value={item.client}
                     onChange={(e) => handleItemChange(index, "client", e.target.value)}
                   />
@@ -591,66 +803,52 @@ const exportToPDFLightweight = () => {
               />
             </div>
           </div>
-          <Button className="mt-4" onClick={exportToPDF}>
-            Exportar a PDF
-          </Button>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={saveDraft} disabled={draftStatus === "saving"}>
+              {draftStatus === "saving" ? "Guardando…" : "Guardar borrador"}
+            </Button>
+            <Button onClick={exportToPDF}>Finalizar</Button>
+            <span className="text-xs text-gray-500">
+              {draftStatus === "saved" && "Borrador guardado"}
+              {draftStatus === "error" && "No se pudo guardar el borrador"}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded border bg-gray-50 p-2 text-sm">
+            <span className="text-gray-500">Asunto del correo:</span>
+            <span className="font-medium">{emailSubject}</span>
+            <Button size="sm" variant="outline" className="ml-auto" onClick={copyEmailSubject}>
+              {subjectCopied ? "Copiado" : "Copiar"}
+            </Button>
+          </div>
+          {historyStatus.kind === "saving" && (
+            <p className="mt-2 text-sm text-gray-500">Guardando en el historial…</p>
+          )}
+          {historyStatus.kind === "saved" && (
+            <div className="mt-2 rounded border border-green-300 bg-green-50 p-2 text-sm text-green-800">
+              ✓ Factura guardada en el historial
+              {historyStatus.pairs > 0 &&
+                ` · ${historyStatus.pairs} ${historyStatus.pairs === 1 ? "proyecto-cliente guardado" : "proyectos-cliente guardados"}`}
+              {historyStatus.incomplete > 0 && (
+                <div className="text-xs text-amber-700">
+                  {historyStatus.incomplete === 1
+                    ? "1 línea no tiene proyecto y cliente a la vez, así que no se guardó como sugerencia."
+                    : `${historyStatus.incomplete} líneas no tienen proyecto y cliente a la vez, así que no se guardaron como sugerencia.`}
+                </div>
+              )}
+            </div>
+          )}
+          {historyStatus.kind === "error" && (
+            <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+              ⚠️ El PDF se descargó, pero no se guardó en el historial: {historyStatus.message}
+            </div>
+          )}
 
-          {/* Datos de cobro (colapsable, persistencia en JSON) */}
-          <Collapsible className="mt-6 border rounded bg-gray-50">
-            <CollapsibleTrigger className="flex w-full items-center justify-between p-4 font-semibold group">
-              <span>Datos de Cobro</span>
-              <span className="flex items-center gap-2 text-xs font-normal text-gray-500">
-                {bankSaveStatus === "saving" && "Guardando…"}
-                {bankSaveStatus === "saved" && "Guardado"}
-                {bankSaveStatus === "error" && "Solo local (servidor no disponible)"}
-                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
-              </span>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="px-4 pb-4 space-y-4">
-              <div className="space-y-2">
-                <h4 className="text-sm font-semibold text-gray-700">Transferencia bancaria</h4>
-                {TRANSFER_FIELDS.map(({ key, label }) => {
-                  const value = bankEditMode
-                    ? bankDraft[key] ?? ""
-                    : (editableText as Record<string, string>)[key]
-                  return (
-                    <div key={key}>
-                      <Label htmlFor={`bank-${key}`}>{label}</Label>
-                      <Input
-                        id={`bank-${key}`}
-                        value={value}
-                        disabled={!bankEditMode}
-                        onChange={(e) => handleBankDraftChange(key, e.target.value)}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="flex gap-2 pt-2">
-                {bankEditMode ? (
-                  <>
-                    <Button
-                      onClick={saveBankEdit}
-                      disabled={bankSaveStatus === "saving"}
-                    >
-                      {bankSaveStatus === "saving" ? "Guardando…" : "Guardar"}
-                    </Button>
-                    <Button variant="outline" onClick={cancelBankEdit}>
-                      Cancelar
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="outline"
-                    onClick={startBankEdit}
-                    disabled={!bankInfoLoaded}
-                  >
-                    Editar
-                  </Button>
-                )}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+          <PaymentMethodsPanel
+            methods={paymentMethods}
+            selectedId={paymentMethodId}
+            onSelect={setPaymentMethodId}
+            onMethodsChange={setPaymentMethods}
+          />
         </div>
         <div>
           <h2 className="text-xl font-semibold mb-2">Vista Previa</h2>
@@ -660,6 +858,7 @@ const exportToPDFLightweight = () => {
             price={invoicePrice}
             total={invoiceTotal}
             editableText={editableText}
+            paymentMethod={selectedPaymentMethod}
             onEditableTextChange={handleEditableTextChange}
           />
         </div>

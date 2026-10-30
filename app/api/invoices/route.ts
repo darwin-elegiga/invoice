@@ -1,39 +1,13 @@
 import { NextResponse } from "next/server"
 import crypto from "crypto"
 import { put } from "@vercel/blob"
-import { redis, KV_KEYS } from "@/lib/storage"
+import { FILE_TYPES, INVOICE_RECIPIENT, detectFileType, listInvoices, saveInvoice, getInvoice } from "@/lib/invoices"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-export type InvoiceRecord = {
-  id: string
-  invoiceNumber: string
-  date: string
-  year: number
-  month: number
-  total: string
-  clientName: string
-  notes: string
-  fileName: string
-  blobUrl: string
-  blobPath: string
-  uploadedAt: string
-}
-
-async function readIndex(): Promise<InvoiceRecord[]> {
-  const stored = await redis.get<InvoiceRecord[]>(KV_KEYS.invoices)
-  return Array.isArray(stored) ? stored : []
-}
-
-async function writeIndex(records: InvoiceRecord[]) {
-  await redis.set(KV_KEYS.invoices, records)
-}
-
 export async function GET() {
-  const records = await readIndex()
-  records.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-  return NextResponse.json(records)
+  return NextResponse.json(await listInvoices())
 }
 
 export async function POST(request: Request) {
@@ -42,11 +16,18 @@ export async function POST(request: Request) {
   const date = String(form.get("date") ?? "").trim()
   const invoiceNumber = String(form.get("invoiceNumber") ?? "").trim()
   const total = String(form.get("total") ?? "").trim()
-  const clientName = String(form.get("clientName") ?? "").trim()
   const notes = String(form.get("notes") ?? "").trim()
+  const paymentMethod = String(form.get("paymentMethod") ?? "").trim()
+
+  let items: unknown = []
+  try {
+    items = JSON.parse(String(form.get("items") ?? "[]"))
+  } catch {
+    return NextResponse.json({ error: "items must be valid JSON" }, { status: 400 })
+  }
 
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "PDF file is required" }, { status: 400 })
+    return NextResponse.json({ error: "file is required" }, { status: 400 })
   }
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 })
@@ -54,37 +35,33 @@ export async function POST(request: Request) {
   if (!invoiceNumber) {
     return NextResponse.json({ error: "invoiceNumber is required" }, { status: 400 })
   }
-  if (!file.type.includes("pdf") && !file.name.toLowerCase().endsWith(".pdf")) {
-    return NextResponse.json({ error: "file must be a PDF" }, { status: 400 })
+  const fileType = detectFileType(file)
+  if (!fileType) {
+    return NextResponse.json({ error: "file must be a PDF or an Excel spreadsheet" }, { status: 400 })
   }
 
   const id = crypto.randomUUID()
   const safeName = file.name.replace(/[^\w.\- ]+/g, "_")
-  const blobPath = `invoices/${id}__${safeName}`
-  const blob = await put(blobPath, file, {
+  const blob = await put(`invoices/${fileType}/${id}__${safeName}`, file, {
     access: "public",
-    contentType: "application/pdf",
+    contentType: FILE_TYPES[fileType].contentType,
   })
 
-  const [yearStr, monthStr] = date.split("-")
-  const record: InvoiceRecord = {
+  await saveInvoice({
     id,
     invoiceNumber,
     date,
-    year: Number(yearStr),
-    month: Number(monthStr),
     total,
-    clientName,
+    clientName: INVOICE_RECIPIENT,
     notes,
+    paymentMethod,
+    fileType,
     fileName: file.name,
     blobUrl: blob.url,
     blobPath: blob.pathname,
     uploadedAt: new Date().toISOString(),
-  }
+    items: items as never,
+  })
 
-  const records = await readIndex()
-  records.push(record)
-  await writeIndex(records)
-
-  return NextResponse.json(record, { status: 201 })
+  return NextResponse.json(await getInvoice(id), { status: 201 })
 }

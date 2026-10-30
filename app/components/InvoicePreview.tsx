@@ -1,4 +1,5 @@
 import { formatEsNumberString } from "../utils/number-utils"
+import type { PaymentMethod } from "./PaymentMethodsPanel"
 
 interface InvoiceItem {
   description: string
@@ -8,10 +9,6 @@ interface InvoiceItem {
 interface EditableTextProps {
   companyName: string
   nif: string
-  bankName: string
-  swiftBic: string
-  beneficiary: string
-  bankAccount: string
   address: string
   clientName: string
   clientId: string
@@ -26,6 +23,7 @@ export function InvoicePreview({
   price,
   total,
   editableText,
+  paymentMethod,
   onEditableTextChange,
 }: {
   items: InvoiceItem[]
@@ -33,6 +31,7 @@ export function InvoicePreview({
   price: string
   total: string
   editableText: EditableTextProps
+  paymentMethod: PaymentMethod | null
   onEditableTextChange: (key: string, value: string) => void
 }) {
   return (
@@ -120,11 +119,16 @@ export function InvoicePreview({
         <div className="mt-auto">
           <div className="mb-8">
             <div className="border-t border-dotted border-black w-full my-4"></div>
-            <p className="mb-1">Transferencia bancaria</p>
-            <p className="mb-1">Banco: {editableText.bankName}</p>
-            <p className="mb-1">SWIFT/BIC: {editableText.swiftBic}</p>
-            <p className="mb-1">Beneficiario: {editableText.beneficiary}</p>
-            <p>Número de cuenta: {editableText.bankAccount}</p>
+            {paymentMethod && (
+              <>
+                <p className="mb-1">{paymentMethod.name}</p>
+                {paymentMethod.lines.map((line, i) => (
+                  <p key={i} className="mb-1 last:mb-0">
+                    {line.label}: {line.value}
+                  </p>
+                ))}
+              </>
+            )}
             <div className="border-t border-dotted border-black w-full my-4"></div>
           </div>
 
