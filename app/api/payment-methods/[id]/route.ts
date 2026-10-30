@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { requireUnlocked } from "@/lib/auth"
 import {
   cleanPaymentMethod,
   deletePaymentMethod,
@@ -19,6 +20,8 @@ async function parseId(params: Params["params"]) {
 
 // Body: { name, lines } to edit, or { isDefault: true } to make it the default
 export async function PUT(request: Request, { params }: Params) {
+  const denied = await requireUnlocked()
+  if (denied) return denied
   const id = await parseId(params)
   if (!id) return NextResponse.json({ error: "invalid id" }, { status: 400 })
   const body = await request.json().catch(() => null)
@@ -33,6 +36,8 @@ export async function PUT(request: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
+  const denied = await requireUnlocked()
+  if (denied) return denied
   const id = await parseId(params)
   if (!id) return NextResponse.json({ error: "invalid id" }, { status: 400 })
   await deletePaymentMethod(id)

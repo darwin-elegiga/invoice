@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { LockGate } from './components/LockGate'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'Facturas LYN',
+  description: 'Facturas, parte de horas e historial',
+  robots: { index: false, follow: false },
 }
 
 export default function RootLayout({
@@ -12,8 +14,10 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="es">
+      <body>
+        <LockGate>{children}</LockGate>
+      </body>
     </html>
   )
 }

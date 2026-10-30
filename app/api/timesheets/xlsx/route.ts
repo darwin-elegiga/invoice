@@ -1,6 +1,7 @@
 import { timesheetFileName } from "@/lib/timesheets"
 import { listTimesheetMonths } from "@/lib/timesheets-db"
 import { buildTimesheetXlsx } from "@/lib/timesheet-xlsx"
+import { getProfile } from "@/lib/invoices"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -14,8 +15,9 @@ export async function GET(request: Request) {
   if (!Number.isInteger(year) || year < 2000 || !Number.isInteger(month) || month < 1 || month > 12) {
     return Response.json({ error: "year and month are required" }, { status: 400 })
   }
-  const buffer = await buildTimesheetXlsx(year, await listTimesheetMonths(year))
-  const fileName = timesheetFileName(year, month)
+  const profile = await getProfile()
+  const buffer = await buildTimesheetXlsx(year, await listTimesheetMonths(year), profile.fullName)
+  const fileName = timesheetFileName(year, month, profile.shortName)
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -2,8 +2,6 @@ import { HOURS_PER_DAY, getDefaultDayTypes, type DayType } from "@/app/utils/wor
 
 export type { DayType }
 
-export const WORKER_NAME = "Darwin Alejandro Elégiga López"
-
 // One row of the yearly hours sheet. Keys of hours/dayTypes are day numbers.
 export type TimesheetMonth = {
   year: number
@@ -21,6 +19,18 @@ export const DAY_TYPE_LABELS: Record<DayType, string> = {
   vacation: "Vacaciones",
 }
 
+export type TimesheetLine = { project: string; client: string }
+
+/** The sheet keeps clients and projects as two newline lists in the same order. */
+export function timesheetLines(month: Pick<TimesheetMonth, "clients" | "projects">): TimesheetLine[] {
+  const clients = month.clients ? month.clients.split("\n") : []
+  const projects = month.projects ? month.projects.split("\n") : []
+  return Array.from({ length: Math.max(clients.length, projects.length) }, (_, i) => ({
+    project: projects[i]?.trim() ?? "",
+    client: clients[i]?.trim() ?? "",
+  }))
+}
+
 export function daysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate()
 }
@@ -33,8 +43,8 @@ export function workedDays(month: Pick<TimesheetMonth, "hours">) {
   return Object.values(month.hours).filter((h) => Number(h) > 0).length
 }
 
-export function timesheetFileName(year: number, month: number) {
-  return `Parte de horas DARWIN ELÉGIGA ${month}-${year}.xlsx`
+export function timesheetFileName(year: number, month: number, shortName: string) {
+  return `Parte de horas ${shortName} ${month}-${year}.xlsx`
 }
 
 /** New month: calendar day types and a full day on every working day. */

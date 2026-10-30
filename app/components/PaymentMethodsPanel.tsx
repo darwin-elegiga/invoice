@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { ChevronDown, PlusCircle, Trash2 } from "lucide-react"
+import Link from "next/link"
+import { ChevronDown, Lock, PlusCircle, Trash2 } from "lucide-react"
 
 export interface PaymentMethodLine {
   label: string
@@ -23,19 +24,25 @@ type Draft = { id: number | null; name: string; lines: PaymentMethodLine[] }
 
 const EMPTY_LINE: PaymentMethodLine = { label: "", value: "" }
 
+// On the invoice page it only picks a method; editing (editable) lives in
+// the PIN-protected settings page.
 export function PaymentMethodsPanel({
   methods,
   selectedId,
   onSelect,
   onMethodsChange,
+  editable = false,
+  defaultOpen = false,
 }: {
   methods: PaymentMethod[]
   selectedId: number | null
   onSelect: (id: number) => void
   onMethodsChange: (methods: PaymentMethod[]) => void
+  editable?: boolean
+  defaultOpen?: boolean
 }) {
   const [draft, setDraft] = useState<Draft | null>(null)
-  const [status, setStatus] = useState<"idle" | "saving" | "error">("idle")
+  const [status, setStatus] = useState<"idle" | "saving" | "error" | "locked">("idle")
 
   const request = async (url: string, init: RequestInit) => {
     setStatus("saving")
@@ -44,6 +51,10 @@ export function PaymentMethodsPanel({
         ...init,
         headers: { "Content-Type": "application/json" },
       })
+      if (res.status === 401) {
+        setStatus("locked")
+        return null
+      }
       if (!res.ok) throw new Error()
       const updated: PaymentMethod[] = await res.json()
       onMethodsChange(updated)
@@ -96,7 +107,7 @@ export function PaymentMethodsPanel({
     })
 
   return (
-    <Collapsible className="mt-6 rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <Collapsible className="mt-6 rounded-2xl border border-zinc-200 bg-white shadow-sm" defaultOpen={defaultOpen}>
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-5 text-left group">
         <span className="min-w-0">
           <span className="block text-sm font-semibold">Método de pago</span>
@@ -107,6 +118,7 @@ export function PaymentMethodsPanel({
         <span className="flex shrink-0 items-center gap-2 text-xs font-normal text-zinc-500">
           {status === "saving" && "Guardando…"}
           {status === "error" && "No se pudo guardar"}
+          {status === "locked" && "Sesión caducada: vuelve a abrir el candado"}
           <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
         </span>
       </CollapsibleTrigger>
@@ -141,6 +153,7 @@ export function PaymentMethodsPanel({
                 ))}
               </span>
             </label>
+            {editable && (
             <div className="mt-2 flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => startEdit(method)}>
                 Editar
@@ -159,10 +172,18 @@ export function PaymentMethodsPanel({
                 Eliminar
               </Button>
             </div>
+            )}
           </div>
         ))}
 
-        {draft ? (
+        {!editable ? (
+          <Link
+            href="/ajustes"
+            className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900"
+          >
+            <Lock className="h-3.5 w-3.5" /> Editar métodos de pago en Ajustes
+          </Link>
+        ) : draft ? (
           <div className="space-y-2 rounded-xl border border-zinc-200 bg-white p-4">
             <h4 className="text-sm font-semibold">
               {draft.id ? "Editar método de pago" : "Nuevo método de pago"}

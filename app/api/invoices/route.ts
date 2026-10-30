@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import crypto from "crypto"
 import { put } from "@vercel/blob"
-import { FILE_TYPES, INVOICE_RECIPIENT, detectFileType, listInvoices, saveInvoice, getInvoice } from "@/lib/invoices"
+import { FILE_TYPES, detectFileType, getProfile, listInvoices, saveInvoice, getInvoice } from "@/lib/invoices"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -52,7 +52,8 @@ export async function POST(request: Request) {
     invoiceNumber,
     date,
     total,
-    clientName: INVOICE_RECIPIENT,
+    // Every invoice is issued to the company; project clients go in the items
+    clientName: (await getProfile()).companyName,
     notes,
     paymentMethod,
     fileType,

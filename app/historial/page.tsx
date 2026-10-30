@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { AppHeader } from "@/app/components/AppHeader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -213,17 +214,7 @@ export default function HistorialPage() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
     <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-      <header className="mb-10 flex items-center justify-between text-sm">
-        <h1 className="text-lg font-semibold tracking-tight">Historial</h1>
-        <nav className="flex gap-5 text-zinc-500">
-          <Link href="/" className="hover:text-zinc-900">
-            Facturas
-          </Link>
-          <Link href="/horas" className="hover:text-zinc-900">
-            Parte de horas
-          </Link>
-        </nav>
-      </header>
+      <AppHeader title="Historial" />
 
       <div className="space-y-8">
         {/* Rarely used (invoices made outside the app), so it stays folded */}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { FILE_TYPES, INVOICE_RECIPIENT, cleanItems, listInvoices, saveInvoice, type FileType } from "@/lib/invoices"
+import { FILE_TYPES, cleanItems, getProfile, listInvoices, saveInvoice, type FileType } from "@/lib/invoices"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -40,6 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Expected an array of records" }, { status: 400 })
   }
 
+  const recipient = (await getProfile()).companyName
   const existingIds = new Set((await listInvoices()).map((r) => r.id))
   let added = 0
   let updated = 0
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
         invoiceNumber: item.invoiceNumber,
         date: item.date,
         total: str(item.total),
-        clientName: str(item.clientName) || INVOICE_RECIPIENT,
+        clientName: str(item.clientName) || recipient,
         notes: str(item.notes),
         paymentMethod: str(item.paymentMethod),
         fileType: fileType in FILE_TYPES ? fileType : "pdf",

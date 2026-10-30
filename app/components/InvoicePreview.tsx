@@ -11,6 +11,7 @@ interface EditableTextProps {
   nif: string
   address: string
   clientName: string
+  clientIdLabel: string
   clientId: string
   clientAddress: string
   invoiceNumber: string
@@ -66,7 +67,7 @@ export function InvoicePreview({
         {/* Client Info */}
         <div className="mb-24">
           <div><span className="font-semibold">Nombre: </span>{editableText.clientName}</div>
-          <div><span className="font-semibold">Pasaporte: </span>{editableText.clientId}</div>
+          <div><span className="font-semibold">{editableText.clientIdLabel}: </span>{editableText.clientId}</div>
           <div><span className="font-semibold">Dirección: </span><span className="whitespace-pre-line">{editableText.clientAddress}</span></div>
         </div>
 

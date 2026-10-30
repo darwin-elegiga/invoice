@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db"
+import { type Profile, withProfileDefaults } from "@/lib/profile"
 
 // Files stored in the history. "xlsx" is accepted already; the form that
 // generates spreadsheets comes later.
@@ -12,8 +13,6 @@ export const FILE_TYPES = {
 
 export type FileType = keyof typeof FILE_TYPES
 
-// Every invoice is issued to LYN; the project clients go in the line items.
-export const INVOICE_RECIPIENT = "LYN Soluciones Tecnológicas S.L"
 
 export type InvoiceItem = {
   project: string
@@ -284,4 +283,14 @@ export async function deletePaymentMethod(id: number) {
         and not exists (select 1 from payment_methods where is_default)
     `,
   ])
+}
+
+const PROFILE_KEY = "profile"
+
+export async function getProfile(): Promise<Profile> {
+  return withProfileDefaults(await getSetting<Partial<Profile>>(PROFILE_KEY))
+}
+
+export async function saveProfile(profile: Profile) {
+  await setSetting(PROFILE_KEY, profile)
 }

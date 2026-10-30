@@ -1,6 +1,5 @@
 import ExcelJS from "exceljs"
 import {
-  WORKER_NAME,
   daysInMonth,
   totalHours,
   workedDays,
@@ -47,7 +46,7 @@ const mediumLight = line("medium", "FFBDBDBD")
 const thinBlack = line("thin", "FF000000")
 const center: Partial<ExcelJS.Alignment> = { horizontal: "center", vertical: "middle", wrapText: true }
 
-export async function buildTimesheetXlsx(year: number, months: TimesheetMonth[]) {
+export async function buildTimesheetXlsx(year: number, months: TimesheetMonth[], workerName: string) {
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet("Hoja1", {
     pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
@@ -79,7 +78,7 @@ export async function buildTimesheetXlsx(year: number, months: TimesheetMonth[])
     const textFont = { name: "Arial", size: 7, color: { argb: COLORS.text } }
     const textBorder = { left: mediumLight, right: mediumLight, top: thinBlack, bottom: mediumLight }
     const textCells: [number, ExcelJS.CellValue][] = [
-      [1, data ? WORKER_NAME : null],
+      [1, data ? workerName : null],
       [2, data?.clients || null],
       [3, data?.projects || null],
       [4, month],
