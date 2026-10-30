@@ -101,3 +101,34 @@ export function getWorkdaySuggestion(year: number, month0: number): WorkdaySugge
     hasData: Boolean(calendar),
   }
 }
+
+export type DayType = "weekend" | "holiday" | "vacation"
+
+/**
+ * Tipo por defecto de cada día del mes (clave = día 1-31). Los laborables no
+ * aparecen; los festivos "por confirmar" se tratan como laborables.
+ */
+export function getDefaultDayTypes(year: number, month0: number): Record<number, DayType> {
+  const types: Record<number, DayType> = {}
+  const daysInMonth = new Date(year, month0 + 1, 0).getDate()
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (!isWeekday(new Date(year, month0, d))) types[d] = "weekend"
+  }
+  const calendar = CALENDARS[year]
+  if (!calendar) return types
+  const dayIn = (iso: string) => {
+    const date = parseIso(iso)
+    return date.getFullYear() === year && date.getMonth() === month0 && isWeekday(date)
+      ? date.getDate()
+      : null
+  }
+  for (const h of calendar.holidays) {
+    const d = !h.tentative && dayIn(h.date)
+    if (d) types[d] = "holiday"
+  }
+  for (const v of calendar.vacations) {
+    const d = dayIn(v.date)
+    if (d) types[d] = "vacation"
+  }
+  return types
+}

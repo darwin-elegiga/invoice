@@ -87,4 +87,16 @@ select * from (values
     {"label": "Teléfono", "value": "+57 311 491 7090"}
   ]'::jsonb, false, 1)
 ) as seed(name, lines, is_default, position)
-where not exists (select 1 from payment_methods)
+where not exists (select 1 from payment_methods);
+
+-- Yearly hours sheet ("Parte de horas"), one row per month.
+create table if not exists timesheet_months (
+  year integer not null,
+  month integer not null check (month between 1 and 12),
+  clients text not null default '',
+  projects text not null default '',
+  hours jsonb not null default '{}'::jsonb,
+  day_types jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (year, month)
+);

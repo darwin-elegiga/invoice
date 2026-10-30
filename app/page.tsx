@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { InvoicePreview } from "./components/InvoicePreview"
 import { PaymentMethodsPanel, type PaymentMethod } from "./components/PaymentMethodsPanel"
+import { timesheetFileName, totalHours, workedDays, type TimesheetMonth } from "@/lib/timesheets"
 import { jsPDF } from "jspdf"
 import { PlusCircle } from "lucide-react"
 import {
@@ -247,6 +248,28 @@ export default function InvoiceGenerator() {
   const emailSubject = `DARWIN ELÉGIGA ${getInvoiceNameForDate(invoiceDateObj ?? new Date())} Parte de horas y factura`
   const [subjectCopied, setSubjectCopied] = useState(false)
 
+  // Hours sheet of the invoiced month, to reuse its total as invoice units
+  const invoiceYear = (invoiceDateObj ?? new Date()).getFullYear()
+  const invoiceMonth = (invoiceDateObj ?? new Date()).getMonth() + 1
+  const timesheetHref = `/horas?year=${invoiceYear}&month=${invoiceMonth}`
+  const [timesheet, setTimesheet] = useState<TimesheetMonth | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/timesheets?year=${invoiceYear}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: TimesheetMonth[]) => {
+        if (!cancelled) setTimesheet(Array.isArray(data) ? data.find((m) => m.month === invoiceMonth) ?? null : null)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [invoiceYear, invoiceMonth])
+
+  const timesheetHours = timesheet ? totalHours(timesheet) : null
+  const [timesheetArchived, setTimesheetArchived] = useState<boolean | null>(null)
+
   const copyEmailSubject = async () => {
     try {
       await navigator.clipboard.writeText(emailSubject)
@@ -398,6 +421,24 @@ const exportToPDF = async () => {
   await saveInvoiceToHistory(pdf.output("blob"), fileName)
 }
 
+// Stores the hours sheet next to the invoice in the history. No project
+// lines, so the catalog isn't counted twice.
+const archiveTimesheet = async (isoDate: string) => {
+  try {
+    const res = await fetch(`/api/timesheets/xlsx?year=${invoiceYear}&month=${invoiceMonth}`)
+    if (!res.ok) throw new Error()
+    const fd = new FormData()
+    fd.append("file", new File([await res.blob()], timesheetFileName(invoiceYear, invoiceMonth)))
+    fd.append("invoiceNumber", editableText.invoiceNumber)
+    fd.append("date", isoDate)
+    fd.append("notes", "Parte de horas")
+    const saved = await fetch("/api/invoices", { method: "POST", body: fd })
+    setTimesheetArchived(saved.ok)
+  } catch {
+    setTimesheetArchived(false)
+  }
+}
+
 const saveInvoiceToHistory = async (blob: Blob, fileName: string) => {
   const isoDate = toIsoDate(editableText.date)
   if (!isoDate) {
@@ -414,6 +455,7 @@ const saveInvoiceToHistory = async (blob: Blob, fileName: string) => {
   fd.append("items", JSON.stringify(lines))
   fd.append("paymentMethod", selectedPaymentMethod?.name ?? "")
   setHistoryStatus({ kind: "saving" })
+  setTimesheetArchived(null)
   try {
     const res = await fetch("/api/invoices", { method: "POST", body: fd })
     if (!res.ok) {
@@ -426,6 +468,7 @@ const saveInvoiceToHistory = async (blob: Blob, fileName: string) => {
       incomplete: lines.filter((l) => !l.project !== !l.client).length,
     })
     loadCatalog()
+    if (timesheet) archiveTimesheet(isoDate)
     // A finalized invoice no longer needs its draft
     fetch(`/api/drafts?invoiceNumber=${encodeURIComponent(editableText.invoiceNumber)}`, {
       method: "DELETE",
@@ -549,9 +592,14 @@ const exportToPDFLightweight = () => {
     <div className="container mx-auto p-4">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Facturas LYN</h1>
-        <Link href="/historial" className="text-sm text-blue-600 hover:underline">
-          Historial →
-        </Link>
+        <div className="flex gap-4 text-sm">
+          <Link href={timesheetHref} className="text-blue-600 hover:underline">
+            Parte de horas →
+          </Link>
+          <Link href="/historial" className="text-blue-600 hover:underline">
+            Historial →
+          </Link>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -698,6 +746,35 @@ const exportToPDFLightweight = () => {
           {/* Resumen de pago (global) */}
           <div className="mt-4 p-4 border rounded bg-gray-50 space-y-2">
             <h3 className="font-semibold">Resumen de Pago</h3>
+            <div className="flex flex-wrap items-center gap-2 rounded border bg-white p-2 text-sm">
+              {timesheet && timesheetHours !== null ? (
+                <>
+                  <span>
+                    Parte de horas: <strong>{formatEsNumber(timesheetHours)} h</strong> ·{" "}
+                    {workedDays(timesheet)} días
+                  </span>
+                  {parsedUnits !== timesheetHours && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleUnitsChange(String(timesheetHours))}
+                    >
+                      Usar {formatEsNumber(timesheetHours)} h
+                    </Button>
+                  )}
+                  <Link href={timesheetHref} className="ml-auto text-blue-600 hover:underline">
+                    Editar parte
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <span className="text-gray-500">Este mes no tiene parte de horas.</span>
+                  <Link href={timesheetHref} className="ml-auto text-blue-600 hover:underline">
+                    Crear parte
+                  </Link>
+                </>
+              )}
+            </div>
             {workdaySuggestion && (
               <div className="rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-800 space-y-1">
                 <div>
@@ -808,6 +885,13 @@ const exportToPDFLightweight = () => {
               {draftStatus === "saving" ? "Guardando…" : "Guardar borrador"}
             </Button>
             <Button onClick={exportToPDF}>Finalizar</Button>
+            {timesheet && (
+              <Button variant="outline" asChild>
+                <a href={`/api/timesheets/xlsx?year=${invoiceYear}&month=${invoiceMonth}`}>
+                  Descargar parte de horas
+                </a>
+              </Button>
+            )}
             <span className="text-xs text-gray-500">
               {draftStatus === "saved" && "Borrador guardado"}
               {draftStatus === "error" && "No se pudo guardar el borrador"}
@@ -826,6 +910,7 @@ const exportToPDFLightweight = () => {
           {historyStatus.kind === "saved" && (
             <div className="mt-2 rounded border border-green-300 bg-green-50 p-2 text-sm text-green-800">
               ✓ Factura guardada en el historial
+              {timesheetArchived === true && " junto con el parte de horas"}
               {historyStatus.pairs > 0 &&
                 ` · ${historyStatus.pairs} ${historyStatus.pairs === 1 ? "proyecto-cliente guardado" : "proyectos-cliente guardados"}`}
               {historyStatus.incomplete > 0 && (
@@ -836,6 +921,11 @@ const exportToPDFLightweight = () => {
                 </div>
               )}
             </div>
+          )}
+          {historyStatus.kind === "saved" && timesheetArchived === false && (
+            <p className="mt-1 text-xs text-amber-700">
+              No se pudo guardar el parte de horas en el historial.
+            </p>
           )}
           {historyStatus.kind === "error" && (
             <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
