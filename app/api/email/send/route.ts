@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { checkPin } from "@/lib/auth"
 import { parseAddresses } from "@/lib/email"
 import { markInvoiceEmailed } from "@/lib/invoices"
 import { isMailConfigured, sendMail } from "@/lib/mailer"
@@ -8,12 +9,21 @@ export const dynamic = "force-dynamic"
 
 const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024
 
-// Multipart: to, cc, subject, text, invoiceNumber and the exported files
+// Multipart: pin, to, cc, subject, text, invoiceNumber and the exported files.
+// Besides the unlocked session, sending asks for the PIN again (it counts
+// towards the same lockout), since it acts in the owner's name.
 export async function POST(request: Request) {
   if (!isMailConfigured()) {
     return NextResponse.json({ error: "email is not configured" }, { status: 503 })
   }
   const form = await request.formData()
+  const pinCheck = await checkPin(String(form.get("pin") ?? ""))
+  if (!pinCheck.ok) {
+    return NextResponse.json(
+      { error: "wrong PIN", lockedUntil: pinCheck.lockedUntil, attemptsLeft: pinCheck.attemptsLeft },
+      { status: pinCheck.lockedUntil ? 429 : 403 },
+    )
+  }
   const to = parseAddresses(String(form.get("to") ?? ""))
   const cc = parseAddresses(String(form.get("cc") ?? ""))
   const subject = String(form.get("subject") ?? "").trim()

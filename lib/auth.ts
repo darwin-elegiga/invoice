@@ -65,14 +65,44 @@ export async function lockedUntil() {
 
 export type PinCheck = { ok: true } | { ok: false; lockedUntil: number; attemptsLeft: number }
 
+/**
+ * Atomically counts an attempt *before* the PIN is checked, and sets the
+ * lockout in that same statement once past the free attempts. Concurrent
+ * guesses therefore can't all slip through before a failure is recorded:
+ * Postgres serialises the row update and re-checks the WHERE clause, so a
+ * burst gets at most MAX_FREE_ATTEMPTS + 1 checks before being locked out.
+ * Returns the attempt number, or null if currently locked out.
+ */
+async function reserveAttempt(now: number): Promise<number | null> {
+  await sql`
+    insert into settings (key, value)
+    values (${LOCKOUT_KEY}, ${JSON.stringify({ failed: 0, lockedUntil: 0 })}::jsonb)
+    on conflict (key) do nothing
+  `
+  const steps = `array[${LOCKOUT_STEPS_MS.join(",")}]::bigint[]`
+  const rows = await sql.query(
+    `update settings set value = jsonb_build_object(
+       'failed', coalesce((value->>'failed')::int, 0) + 1,
+       'lockedUntil', case
+         when coalesce((value->>'failed')::int, 0) + 1 > $2
+         then $1::bigint + (${steps})[least(coalesce((value->>'failed')::int, 0) + 1 - $2, ${LOCKOUT_STEPS_MS.length})]
+         else 0 end)
+     where key = $3 and coalesce((value->>'lockedUntil')::bigint, 0) <= $1::bigint
+     returning (value->>'failed')::int as failed`,
+    [now, MAX_FREE_ATTEMPTS, LOCKOUT_KEY],
+  )
+  return rows[0] ? Number(rows[0].failed) : null
+}
+
 /** Verifies the PIN, counting failures and applying the lockout. */
 export async function checkPin(pin: string): Promise<PinCheck> {
-  const lockout = await getLockout()
-  if (lockout.lockedUntil > Date.now()) {
-    return { ok: false, lockedUntil: lockout.lockedUntil, attemptsLeft: 0 }
-  }
   const stored = await getSetting<StoredPin>(PIN_KEY)
   if (!stored) return { ok: false, lockedUntil: 0, attemptsLeft: 0 }
+
+  const attempt = await reserveAttempt(Date.now())
+  if (attempt === null) {
+    return { ok: false, lockedUntil: await lockedUntil(), attemptsLeft: 0 }
+  }
 
   const expected = Buffer.from(stored.hash, "base64")
   const actual = await hashPin(pin, Buffer.from(stored.salt, "base64"))
@@ -80,13 +110,11 @@ export async function checkPin(pin: string): Promise<PinCheck> {
     await setSetting(LOCKOUT_KEY, { failed: 0, lockedUntil: 0 })
     return { ok: true }
   }
-
-  const failed = lockout.failed + 1
-  const extra = failed - MAX_FREE_ATTEMPTS
-  const until =
-    extra > 0 ? Date.now() + LOCKOUT_STEPS_MS[Math.min(extra - 1, LOCKOUT_STEPS_MS.length - 1)] : 0
-  await setSetting(LOCKOUT_KEY, { failed, lockedUntil: until })
-  return { ok: false, lockedUntil: until, attemptsLeft: Math.max(0, MAX_FREE_ATTEMPTS - failed) }
+  return {
+    ok: false,
+    lockedUntil: await lockedUntil(),
+    attemptsLeft: Math.max(0, MAX_FREE_ATTEMPTS - attempt),
+  }
 }
 
 // The signing secret is generated once and kept in the database

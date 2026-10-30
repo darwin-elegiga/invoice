@@ -247,7 +247,7 @@ export function TimesheetEditor({
                 key={d}
                 type="button"
                 title={type ? DAY_TYPE_LABELS[type] : undefined}
-                className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-sm transition-all hover:ring-2 hover:ring-zinc-300 sm:aspect-[4/3] ${
+                className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-sm transition-all hover:ring-2 hover:ring-zinc-300 sm:aspect-[4/3] ${
                   type ? DAY_TYPE_CELL[type] : "border border-zinc-200 bg-white text-zinc-900"
                 }`}
                 onMouseDown={() => {
@@ -262,8 +262,9 @@ export function TimesheetEditor({
                   }
                 }}
               >
-                <span className="absolute left-1.5 top-1 text-[10px] text-zinc-400">{d}</span>
-                <span className="font-semibold tabular-nums">{hours ? formatHours(hours) : ""}</span>
+                {/* Day number above the hours so two-digit days never touch them */}
+                <span className="text-[9px] leading-none text-zinc-400">{d}</span>
+                <span className="min-h-5 font-semibold leading-5 tabular-nums">{hours ? formatHours(hours) : ""}</span>
               </button>
             )
           })}

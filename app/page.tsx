@@ -11,6 +11,7 @@ import { InvoicePreview } from "./components/InvoicePreview"
 import { PaymentMethodsPanel, type PaymentMethod } from "./components/PaymentMethodsPanel"
 import { TimesheetEditor, formatHours, type CatalogEntry } from "./components/TimesheetEditor"
 import { EmailPanel } from "./components/EmailPanel"
+import { TimesheetPreview } from "./components/TimesheetPreview"
 import {
   buildDefaultMonth,
   timesheetFileName,
@@ -114,6 +115,11 @@ export default function InvoicePage() {
   const selectedPaymentMethod = paymentMethods.find((m) => m.id === paymentMethodId) ?? null
 
   const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>({ kind: "idle" })
+  const [previewTab, setPreviewTab] = useState<"invoice" | "timesheet">("timesheet")
+  // Both previews must be checked before emailing; any change clears them
+  const [reviewed, setReviewed] = useState({ invoice: false, timesheet: false })
+  // Every month of the year, for the hours-sheet preview
+  const [yearSheets, setYearSheets] = useState<TimesheetMonth[]>([])
   const [subjectCopied, setSubjectCopied] = useState(false)
   // Both actions (email, download) share one generated set of files; any
   // change to the sheet, month or payment method invalidates it
@@ -121,6 +127,7 @@ export default function InvoicePage() {
   const resetPrepared = () => {
     setPrepared(null)
     setDownloadStatus({ kind: "idle" })
+    setReviewed({ invoice: false, timesheet: false })
   }
   useEffect(resetPrepared, [paymentMethodId])
 
@@ -149,6 +156,7 @@ export default function InvoicePage() {
       .then((res) => (res.ok ? res.json() : []))
       .then((data: TimesheetMonth[]) => {
         if (cancelled) return
+        setYearSheets(Array.isArray(data) ? data : [])
         setSheet(Array.isArray(data) ? data.find((m) => m.month === month) ?? null : null)
         setDirty(false)
         setSaveStatus("idle")
@@ -173,6 +181,14 @@ export default function InvoicePage() {
   const pdfName = `FACTURA ${profile.shortName} ${monthName}.pdf`
   const xlsxName = timesheetFileName(year, month, profile.shortName)
   const emailSubject = `${profile.shortName} ${monthName} Parte de horas y factura`
+  // The preview shows the month being edited, even before it is saved
+  const previewMonths = [...yearSheets.filter((m) => m.month !== month), ...(sheet ? [sheet] : [])]
+  const sendBlockedReason =
+    reviewed.invoice && reviewed.timesheet
+      ? null
+      : `Para enviar, marca como revisad${
+          !reviewed.invoice && !reviewed.timesheet ? "os la factura y el parte" : !reviewed.invoice ? "a la factura" : "o el parte de horas"
+        } en la vista previa.`
 
   const shiftMonth = (delta: number) => {
     if (dirty && !window.confirm("Hay cambios sin guardar en el parte. ¿Cambiar de mes igualmente?")) return
@@ -455,6 +471,8 @@ export default function InvoicePage() {
                     subject={emailSubject}
                     monthLabel={monthName.toLowerCase()}
                     invoiceNumber={invoiceNumber}
+                    attachmentNames={[pdfName, xlsxName]}
+                    blockedReason={sendBlockedReason}
                   />
 
                   <div className="space-y-2 border-t border-zinc-100 pt-5">
@@ -495,9 +513,45 @@ export default function InvoicePage() {
           </div>
 
           <div className="min-w-0 xl:flex xl:min-h-0 xl:flex-col">
-            <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">Vista previa</h2>
-            <div className="overflow-auto rounded-2xl border border-zinc-200 bg-zinc-100 p-4 sm:p-6 xl:min-h-0 xl:flex-1">
-              <div className="w-fit shadow-lg">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-1 rounded-lg bg-zinc-100 p-1 text-sm">
+                {(
+                  [
+                    ["timesheet", "Parte de horas"],
+                    ["invoice", "Factura"],
+                  ] as const
+                ).map(([tab, label]) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
+                      previewTab === tab ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-900"
+                    }`}
+                    onClick={() => setPreviewTab(tab)}
+                  >
+                    {reviewed[tab] && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {sheet && (
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-zinc-900"
+                    checked={reviewed[previewTab]}
+                    onChange={(e) => setReviewed((r) => ({ ...r, [previewTab]: e.target.checked }))}
+                  />
+                  {previewTab === "invoice" ? "He revisado la factura" : "He revisado el parte de horas"}
+                </label>
+              )}
+            </div>
+            <div className="relative overflow-auto rounded-2xl border border-zinc-200 bg-zinc-100 p-4 sm:p-6 xl:min-h-0 xl:flex-1">
+              {/* The invoice stays rendered (off-screen when hidden) so the PDF can be captured from it */}
+              <div
+                className={previewTab === "invoice" ? "w-fit shadow-lg" : "pointer-events-none absolute -left-[10000px] top-0 w-fit"}
+                aria-hidden={previewTab !== "invoice"}
+              >
                 <InvoicePreview
                   items={lines.map((l) => ({ description: l.project, client: l.client }))}
                   units={formatHours(hours)}
@@ -508,6 +562,16 @@ export default function InvoicePage() {
                   onEditableTextChange={() => {}}
                 />
               </div>
+              {previewTab === "timesheet" && (
+                <div className="w-fit shadow-lg">
+                  <TimesheetPreview
+                    year={year}
+                    months={previewMonths}
+                    highlightMonth={month}
+                    workerName={profile.fullName}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
