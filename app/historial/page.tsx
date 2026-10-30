@@ -20,6 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { ChevronRight } from "lucide-react"
 import { formatEsNumberString } from "../utils/number-utils"
 
 type InvoiceRecord = {
@@ -209,18 +211,30 @@ export default function HistorialPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Historial de Facturas</h1>
-        <Link href="/" className="text-sm text-blue-600 hover:underline">
-          ← Volver al generador
-        </Link>
-      </div>
+    <div className="min-h-screen bg-zinc-50 text-zinc-900">
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+      <header className="mb-10 flex items-center justify-between text-sm">
+        <h1 className="text-lg font-semibold tracking-tight">Historial</h1>
+        <nav className="flex gap-5 text-zinc-500">
+          <Link href="/" className="hover:text-zinc-900">
+            Facturas
+          </Link>
+          <Link href="/horas" className="hover:text-zinc-900">
+            Parte de horas
+          </Link>
+        </nav>
+      </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-1 p-4 border rounded bg-gray-50">
-          <h2 className="font-semibold mb-3">Subir factura</h2>
-          <form onSubmit={handleUpload} className="space-y-3">
+      <div className="space-y-8">
+        {/* Rarely used (invoices made outside the app), so it stays folded */}
+        <Collapsible className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+          <CollapsibleTrigger className="group flex w-full items-center gap-2 px-5 py-3 text-left text-sm">
+            <ChevronRight className="h-4 w-4 text-zinc-400 transition-transform group-data-[state=open]:rotate-90" />
+            <span className="font-medium">Subir factura</span>
+            <span className="text-zinc-400">· hecha fuera de la app</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="px-5 pb-5">
+          <form onSubmit={handleUpload} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="upload-file">PDF</Label>
               <Input
@@ -298,15 +312,16 @@ export default function HistorialPage() {
               />
             </div>
             {uploadError && (
-              <p className="text-sm text-red-600">{uploadError}</p>
+              <p className="text-sm text-red-600 sm:col-span-full">{uploadError}</p>
             )}
-            <Button type="submit" disabled={uploading} className="w-full">
+            <Button type="submit" disabled={uploading} className="sm:col-span-full sm:w-fit sm:justify-self-end">
               {uploading ? "Subiendo…" : "Subir"}
             </Button>
           </form>
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
 
-        <div className="md:col-span-2">
+        <div>
           <div className="flex flex-wrap gap-3 mb-4 items-end">
             <div className="w-40">
               <Label>Año</Label>
@@ -356,7 +371,7 @@ export default function HistorialPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-zinc-500">
               {loading ? "Cargando…" : `${filtered.length} de ${records.length}`}
             </div>
             <div className="ml-auto flex gap-2">
@@ -374,14 +389,14 @@ export default function HistorialPage() {
                   className="hidden"
                   onChange={handleImportJson}
                 />
-                <span className="inline-flex items-center justify-center h-10 px-4 py-2 rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer">
+                <span className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50">
                   Importar JSON
                 </span>
               </label>
             </div>
           </div>
 
-          <div className="border rounded">
+          <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -395,7 +410,7 @@ export default function HistorialPage() {
               <TableBody>
                 {filtered.length === 0 && !loading && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-gray-500 py-6">
+                    <TableCell colSpan={5} className="text-center text-zinc-500 py-6">
                       Sin facturas
                     </TableCell>
                   </TableRow>
@@ -409,7 +424,7 @@ export default function HistorialPage() {
                         ? r.items.map((i, idx) => (
                             <div key={idx}>
                               {i.project || "—"}
-                              {i.client && <span className="text-gray-500"> · {i.client}</span>}
+                              {i.client && <span className="text-zinc-500"> · {i.client}</span>}
                             </div>
                           ))
                         : r.notes || "—"}
@@ -417,7 +432,7 @@ export default function HistorialPage() {
                     <TableCell className="text-right">
                       {r.total ? `${formatEsNumberString(r.total)} EUR` : "—"}
                       {r.paymentMethod && (
-                        <div className="text-xs text-gray-500">{r.paymentMethod}</div>
+                        <div className="text-xs text-zinc-500">{r.paymentMethod}</div>
                       )}
                     </TableCell>
                     <TableCell className="text-right space-x-2">
@@ -425,13 +440,13 @@ export default function HistorialPage() {
                         href={`/api/invoices/${r.id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-blue-600 hover:underline text-sm"
+                        className="text-sm text-zinc-700 hover:text-zinc-900 hover:underline"
                       >
                         {FILE_LABELS[r.fileType] ?? "Ver archivo"}
                       </a>
                       <button
                         onClick={() => handleDelete(r.id)}
-                        className="text-red-600 hover:underline text-sm"
+                        className="text-sm text-zinc-400 hover:text-red-600"
                       >
                         Eliminar
                       </button>
@@ -442,27 +457,27 @@ export default function HistorialPage() {
             </Table>
           </div>
 
-          <div className="mt-6 p-4 border rounded bg-gray-50">
-            <h2 className="font-semibold mb-1">Proyectos y clientes guardados</h2>
-            <p className="text-xs text-gray-500 mb-3">
+          <div className="mt-8 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-1 text-sm font-semibold">Proyectos y clientes guardados</h2>
+            <p className="text-xs text-zinc-500 mb-3">
               Se guardan solos al exportar una factura y aparecen como sugerencias en el
               generador.
             </p>
             {catalog.length === 0 ? (
-              <p className="text-sm text-gray-500">Todavía no hay ninguno.</p>
+              <p className="text-sm text-zinc-500">Todavía no hay ninguno.</p>
             ) : (
-              <ul className="divide-y">
+              <ul className="divide-y divide-zinc-100">
                 {catalog.map((entry) => (
                   <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
                     <span>
-                      {entry.project} <span className="text-gray-500">· {entry.client}</span>
-                      <span className="ml-2 text-xs text-gray-400">
+                      {entry.project} <span className="text-zinc-500">· {entry.client}</span>
+                      <span className="ml-2 text-xs text-zinc-400">
                         {entry.timesUsed} {entry.timesUsed === 1 ? "factura" : "facturas"}
                       </span>
                     </span>
                     <button
                       onClick={() => handleDeleteCatalogEntry(entry)}
-                      className="text-red-600 hover:underline"
+                      className="text-zinc-400 hover:text-red-600"
                     >
                       Quitar
                     </button>
@@ -473,6 +488,7 @@ export default function HistorialPage() {
           </div>
         </div>
       </div>
+    </div>
     </div>
   )
 }

@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { InvoicePreview } from "./components/InvoicePreview"
 import { PaymentMethodsPanel, type PaymentMethod } from "./components/PaymentMethodsPanel"
 import { timesheetFileName, totalHours, workedDays, type TimesheetMonth } from "@/lib/timesheets"
 import { jsPDF } from "jspdf"
-import { PlusCircle } from "lucide-react"
+import { ChevronRight, PlusCircle, Trash2 } from "lucide-react"
 import {
   getCurrentMonthInvoiceNumber,
   getInvoiceNameForDate,
@@ -201,6 +202,7 @@ export default function InvoiceGenerator() {
   const loadDraft = (draft: Draft) => {
     const { data } = draft
     setItems(data.items?.length ? data.items : [{ description: "", client: "" }])
+    setExpandedItems(data.items?.length ? new Set() : new Set([0]))
     setInvoiceUnits(data.invoiceUnits ?? "")
     setInvoicePrice(data.invoicePrice ?? "")
     setInvoiceTotal(data.invoiceTotal ?? "")
@@ -234,6 +236,7 @@ export default function InvoiceGenerator() {
         setItems((current) => {
           if (current.some((i) => i.description || i.client)) return current
           setPrefilledFrom(last.invoiceNumber)
+          setExpandedItems(new Set())
           return lastItems
         })
       })
@@ -242,6 +245,7 @@ export default function InvoiceGenerator() {
 
   const clearPrefilledItems = () => {
     setItems([{ description: "", client: "" }])
+    setExpandedItems(new Set([0]))
     setPrefilledFrom(null)
   }
 
@@ -349,13 +353,28 @@ export default function InvoiceGenerator() {
     }
   }
 
+  // Lines start collapsed (just "Proyecto · Cliente"); new empty ones open
+  const [expandedItems, setExpandedItems] = useState<Set<number>>(() => new Set([0]))
+
+  const toggleItem = (index: number, open: boolean) =>
+    setExpandedItems((prev) => {
+      const next = new Set(prev)
+      if (open) next.add(index)
+      else next.delete(index)
+      return next
+    })
+
   const addItem = () => {
     setItems([...items, { description: "", client: "" }])
+    setExpandedItems((prev) => new Set(prev).add(items.length))
   }
 
   const removeItem = (index: number) => {
     const newItems = items.filter((_, i) => i !== index)
     setItems(newItems)
+    setExpandedItems(
+      (prev) => new Set(Array.from(prev).filter((i) => i !== index).map((i) => (i > index ? i - 1 : i))),
+    )
   }
 
 const exportToPDF = async () => {
@@ -381,6 +400,12 @@ const exportToPDF = async () => {
   const content = document.getElementById("invoice-preview")
   if (!content) return
 
+  // The preview column scrolls on its own; capture it unscrolled so the
+  // sheet isn't clipped, then put the user's scroll back.
+  const scroller = content.closest(".overflow-auto")
+  const previousScroll = scroller ? { top: scroller.scrollTop, left: scroller.scrollLeft } : null
+  scroller?.scrollTo(0, 0)
+
   const canvas = await html2canvas(content, {
     scale: 1.5, // Reducido de 2 a 1.5 para menor peso
     useCORS: true,
@@ -390,6 +415,8 @@ const exportToPDF = async () => {
     allowTaint: false,
     foreignObjectRendering: false, // Mejora compatibilidad
   })
+
+  if (scroller && previousScroll) scroller.scrollTo(previousScroll.left, previousScroll.top)
 
   const imgData = canvas.toDataURL("image/jpeg", 0.85) // JPEG con 85% calidad en lugar de PNG
   const pdf = new jsPDF({
@@ -589,24 +616,26 @@ const exportToPDFLightweight = () => {
 }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Facturas LYN</h1>
-        <div className="flex gap-4 text-sm">
-          <Link href={timesheetHref} className="text-blue-600 hover:underline">
-            Parte de horas →
+    <div className="min-h-screen bg-zinc-50 text-zinc-900">
+    <div className="mx-auto max-w-[1440px] px-4 py-8 sm:py-12 xl:flex xl:h-screen xl:flex-col xl:py-6">
+      <header className="mb-10 flex shrink-0 items-center justify-between text-sm xl:mb-6">
+        <h1 className="text-lg font-semibold tracking-tight">Facturas LYN</h1>
+        <nav className="flex gap-5 text-zinc-500">
+          <Link href={timesheetHref} className="hover:text-zinc-900">
+            Parte de horas
           </Link>
-          <Link href="/historial" className="text-blue-600 hover:underline">
-            Historial →
+          <Link href="/historial" className="hover:text-zinc-900">
+            Historial
           </Link>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <h2 className="text-xl font-semibold mb-2">Entrada de Datos</h2>
+        </nav>
+      </header>
+      {/* On wide screens each column scrolls on its own: form left, PDF right */}
+      <div className="grid grid-cols-1 gap-8 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(24rem,1fr)_auto]">
+        <div className="xl:-mr-2 xl:overflow-y-auto xl:pb-6 xl:pr-2">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">Datos de la factura</h2>
           
           {drafts.length > 0 && (
-            <div className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm space-y-2">
+            <div className="mb-6 space-y-2 rounded-2xl bg-amber-50 p-4 text-sm">
               <div className="font-semibold text-amber-800">Borradores guardados</div>
               {drafts.map((draft) => (
                 <div key={draft.invoiceNumber} className="flex flex-wrap items-center gap-2">
@@ -645,7 +674,7 @@ const exportToPDFLightweight = () => {
               ))}
             </datalist>
             {prefilledFrom && (
-              <div className="flex flex-wrap items-center gap-2 rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-800">
+              <div className="flex flex-wrap items-center gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
                 <span>
                   Líneas copiadas de la última factura (
                   <span className="font-mono">{prefilledFrom}</span>).
@@ -657,7 +686,7 @@ const exportToPDFLightweight = () => {
             )}
             {catalog.length > 0 && (
               <div className="space-y-1">
-                <div className="text-xs text-gray-500">Reutilizar proyecto y cliente:</div>
+                <div className="text-xs text-zinc-500">Reutilizar proyecto y cliente:</div>
                 <div className="flex flex-wrap gap-2">
                   {catalog.slice(0, RECENT_CATALOG_LIMIT).map((entry) => (
                     <span key={entry.id} className="inline-flex">
@@ -675,7 +704,7 @@ const exportToPDFLightweight = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="rounded-l-none border-l-0 px-2 text-gray-400 hover:text-red-600"
+                        className="rounded-l-none border-l-0 px-2 text-zinc-400 hover:text-red-600"
                         title="Quitar de guardados"
                         aria-label={`Quitar ${entry.project} · ${entry.client} de guardados`}
                         onClick={() => removeCatalogEntry(entry)}
@@ -687,44 +716,72 @@ const exportToPDFLightweight = () => {
                 </div>
               </div>
             )}
-            {items.map((item, index) => (
-              <div key={index} className="space-y-2 p-4 border rounded">
-                <div>
-                  <Label htmlFor={`description-${index}`}>Proyecto</Label>
-                  <Input
-                    id={`description-${index}`}
-                    list="catalog-projects"
-                    autoComplete="off"
-                    value={item.description}
-                    onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor={`client-${index}`}>Cliente</Label>
-                  <Input
-                    id={`client-${index}`}
-                    list="catalog-clients"
-                    autoComplete="off"
-                    value={item.client}
-                    onChange={(e) => handleItemChange(index, "client", e.target.value)}
-                  />
-                </div>
-                {index > 0 && (
-                  <Button variant="destructive" onClick={() => removeItem(index)}>
-                    Eliminar
-                  </Button>
-                )}
-              </div>
-            ))}
-            <Button onClick={addItem} className="w-full">
-              <PlusCircle className="mr-2 h-4 w-4" /> Agregar Item
+            {items.map((item, index) => {
+              const open = expandedItems.has(index)
+              return (
+                <Collapsible
+                  key={index}
+                  open={open}
+                  onOpenChange={(next) => toggleItem(index, next)}
+                  className="rounded-2xl border border-zinc-200 bg-white shadow-sm"
+                >
+                  <div className="flex items-center gap-2 px-5 py-3">
+                    <CollapsibleTrigger className="group flex min-w-0 flex-1 items-center gap-2 text-left text-sm">
+                      <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400 transition-transform group-data-[state=open]:rotate-90" />
+                      {item.description || item.client ? (
+                        <span className="truncate">
+                          <span className="font-medium">{item.description || "Sin proyecto"}</span>
+                          <span className="text-zinc-500"> · {item.client || "Sin cliente"}</span>
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">Línea vacía</span>
+                      )}
+                    </CollapsibleTrigger>
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        aria-label="Eliminar línea"
+                        className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600"
+                        onClick={() => removeItem(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <CollapsibleContent className="space-y-3 px-5 pb-5">
+                    <div>
+                      <Label htmlFor={`description-${index}`}>Proyecto</Label>
+                      <Input
+                        id={`description-${index}`}
+                        list="catalog-projects"
+                        autoComplete="off"
+                        value={item.description}
+                        onChange={(e) => handleItemChange(index, "description", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`client-${index}`}>Cliente</Label>
+                      <Input
+                        id={`client-${index}`}
+                        list="catalog-clients"
+                        autoComplete="off"
+                        value={item.client}
+                        onChange={(e) => handleItemChange(index, "client", e.target.value)}
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )
+            })}
+            <Button onClick={addItem} variant="outline" className="w-full border-dashed text-zinc-500">
+              <PlusCircle className="mr-2 h-4 w-4" /> Añadir línea
             </Button>
           </div>
 
           {/* Fecha de la factura */}
-          <div className="mt-4 p-4 border rounded bg-gray-50 space-y-2">
-            <h3 className="font-semibold">Fecha de la factura</h3>
-            <p className="text-xs text-gray-500">
+          <div className="mt-6 space-y-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <h3 className="text-sm font-semibold">Fecha de la factura</h3>
+            <p className="text-xs text-zinc-500">
               Por defecto se usa el último día del mes actual. Puedes seleccionar una fecha
               de un mes pasado y el número de factura y el nombre del PDF se ajustarán al
               mes/año elegido.
@@ -738,15 +795,15 @@ const exportToPDFLightweight = () => {
                 onChange={(e) => handleDateChange(e.target.value)}
               />
             </div>
-            <div className="text-xs text-gray-600">
+            <div className="text-xs text-zinc-500">
               Número de factura: <span className="font-mono">{editableText.invoiceNumber}</span>
             </div>
           </div>
 
           {/* Resumen de pago (global) */}
-          <div className="mt-4 p-4 border rounded bg-gray-50 space-y-2">
-            <h3 className="font-semibold">Resumen de Pago</h3>
-            <div className="flex flex-wrap items-center gap-2 rounded border bg-white p-2 text-sm">
+          <div className="mt-6 space-y-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <h3 className="text-sm font-semibold">Resumen de Pago</h3>
+            <div className="flex flex-wrap items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 text-sm">
               {timesheet && timesheetHours !== null ? (
                 <>
                   <span>
@@ -762,21 +819,21 @@ const exportToPDFLightweight = () => {
                       Usar {formatEsNumber(timesheetHours)} h
                     </Button>
                   )}
-                  <Link href={timesheetHref} className="ml-auto text-blue-600 hover:underline">
+                  <Link href={timesheetHref} className="ml-auto text-zinc-500 hover:text-zinc-900">
                     Editar parte
                   </Link>
                 </>
               ) : (
                 <>
-                  <span className="text-gray-500">Este mes no tiene parte de horas.</span>
-                  <Link href={timesheetHref} className="ml-auto text-blue-600 hover:underline">
+                  <span className="text-zinc-500">Este mes no tiene parte de horas.</span>
+                  <Link href={timesheetHref} className="ml-auto text-zinc-500 hover:text-zinc-900">
                     Crear parte
                   </Link>
                 </>
               )}
             </div>
             {workdaySuggestion && (
-              <div className="rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-800 space-y-1">
+              <div className="space-y-1 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">
                 <div>
                   💡 Sugerencia (no oficial) — {suggestionMonthLabel}:{" "}
                   {workdaySuggestion.workdaysMin === workdaySuggestion.workdaysMax
@@ -785,10 +842,10 @@ const exportToPDFLightweight = () => {
                   ({HOURS_PER_DAY} h/día)
                 </div>
                 {suggestionDetails.length > 0 && (
-                  <div className="text-xs text-blue-700">{suggestionDetails.join(" · ")}</div>
+                  <div className="text-xs text-sky-700">{suggestionDetails.join(" · ")}</div>
                 )}
                 {!workdaySuggestion.hasData && (
-                  <div className="text-xs text-blue-700">
+                  <div className="text-xs text-sky-700">
                     Sin festivos ni vacaciones: no hay calendario cargado para{" "}
                     {invoiceDateObj?.getFullYear()}.
                   </div>
@@ -844,7 +901,7 @@ const exportToPDFLightweight = () => {
               />
             </div>
             {swapWarning ? (
-              <div className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+              <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
                 ⚠️ Posible intercambio: el precio por hora ({formatEsNumber(parsedPrice)} EUR) es
                 inusualmente alto y las unidades ({invoiceUnits}) inusualmente bajas. Revisa si has
                 invertido Unidades y Precio.
@@ -852,19 +909,19 @@ const exportToPDFLightweight = () => {
             ) : (
               <>
                 {priceError && (
-                  <div className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+                  <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
                     ⚠️ El precio por hora ({formatEsNumber(parsedPrice)} EUR) nunca debería llegar a
                     100. Revísalo.
                   </div>
                 )}
                 {priceUnusual && (
-                  <div className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-700">
+                  <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
                     ⚠️ El precio por hora ({formatEsNumber(parsedPrice)} EUR) rara vez pasa de 10.
                     Comprueba que es correcto.
                   </div>
                 )}
                 {unitsUnusual && (
-                  <div className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-700">
+                  <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
                     ⚠️ Las unidades ({invoiceUnits}) rara vez bajan de 100 horas. Comprueba que es
                     correcto.
                   </div>
@@ -880,7 +937,7 @@ const exportToPDFLightweight = () => {
               />
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-6 flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={saveDraft} disabled={draftStatus === "saving"}>
               {draftStatus === "saving" ? "Guardando…" : "Guardar borrador"}
             </Button>
@@ -892,23 +949,23 @@ const exportToPDFLightweight = () => {
                 </a>
               </Button>
             )}
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-zinc-500">
               {draftStatus === "saved" && "Borrador guardado"}
               {draftStatus === "error" && "No se pudo guardar el borrador"}
             </span>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded border bg-gray-50 p-2 text-sm">
-            <span className="text-gray-500">Asunto del correo:</span>
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+            <span className="text-zinc-500">Asunto del correo:</span>
             <span className="font-medium">{emailSubject}</span>
             <Button size="sm" variant="outline" className="ml-auto" onClick={copyEmailSubject}>
               {subjectCopied ? "Copiado" : "Copiar"}
             </Button>
           </div>
           {historyStatus.kind === "saving" && (
-            <p className="mt-2 text-sm text-gray-500">Guardando en el historial…</p>
+            <p className="mt-3 text-sm text-zinc-500">Guardando en el historial…</p>
           )}
           {historyStatus.kind === "saved" && (
-            <div className="mt-2 rounded border border-green-300 bg-green-50 p-2 text-sm text-green-800">
+            <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
               ✓ Factura guardada en el historial
               {timesheetArchived === true && " junto con el parte de horas"}
               {historyStatus.pairs > 0 &&
@@ -928,7 +985,7 @@ const exportToPDFLightweight = () => {
             </p>
           )}
           {historyStatus.kind === "error" && (
-            <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+            <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
               ⚠️ El PDF se descargó, pero no se guardó en el historial: {historyStatus.message}
             </div>
           )}
@@ -940,19 +997,24 @@ const exportToPDFLightweight = () => {
             onMethodsChange={setPaymentMethods}
           />
         </div>
-        <div>
-          <h2 className="text-xl font-semibold mb-2">Vista Previa</h2>
-          <InvoicePreview
-            items={items}
-            units={invoiceUnits}
-            price={invoicePrice}
-            total={invoiceTotal}
-            editableText={editableText}
-            paymentMethod={selectedPaymentMethod}
-            onEditableTextChange={handleEditableTextChange}
-          />
+        <div className="min-w-0 xl:flex xl:min-h-0 xl:flex-col">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-400">Vista previa</h2>
+          <div className="overflow-auto rounded-2xl border border-zinc-200 bg-zinc-100 p-4 sm:p-6 xl:min-h-0 xl:flex-1">
+            <div className="w-fit shadow-lg">
+              <InvoicePreview
+                items={items}
+                units={invoiceUnits}
+                price={invoicePrice}
+                total={invoiceTotal}
+                editableText={editableText}
+                paymentMethod={selectedPaymentMethod}
+                onEditableTextChange={handleEditableTextChange}
+              />
+            </div>
+          </div>
         </div>
       </div>
+    </div>
     </div>
   )
 }

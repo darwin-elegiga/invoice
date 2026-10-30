@@ -96,28 +96,28 @@ export function PaymentMethodsPanel({
     })
 
   return (
-    <Collapsible className="mt-6 border rounded bg-gray-50">
-      <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-4 text-left group">
+    <Collapsible className="mt-6 rounded-2xl border border-zinc-200 bg-white shadow-sm">
+      <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-5 text-left group">
         <span className="min-w-0">
-          <span className="block font-semibold">Método de pago</span>
-          <span className="block truncate text-sm text-gray-600">
+          <span className="block text-sm font-semibold">Método de pago</span>
+          <span className="block truncate text-sm text-zinc-500">
             {methods.find((m) => m.id === selectedId)?.name ?? "Ninguno seleccionado"}
           </span>
         </span>
-        <span className="flex shrink-0 items-center gap-2 text-xs font-normal text-gray-500">
+        <span className="flex shrink-0 items-center gap-2 text-xs font-normal text-zinc-500">
           {status === "saving" && "Guardando…"}
           {status === "error" && "No se pudo guardar"}
           <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
         </span>
       </CollapsibleTrigger>
-      <CollapsibleContent className="px-4 pb-4 space-y-3">
+      <CollapsibleContent className="space-y-3 px-5 pb-5">
         {methods.length === 0 && (
-          <p className="text-sm text-gray-500">No hay métodos de pago guardados.</p>
+          <p className="text-sm text-zinc-500">No hay métodos de pago guardados.</p>
         )}
         {methods.map((method) => (
           <div
             key={method.id}
-            className={`rounded border p-3 text-sm ${method.id === selectedId ? "border-black bg-white" : "bg-gray-50"}`}
+            className={`rounded-xl border p-3 text-sm ${method.id === selectedId ? "border-zinc-900 bg-white" : "border-zinc-200 bg-zinc-50"}`}
           >
             <label className="flex cursor-pointer items-start gap-2">
               <input
@@ -130,12 +130,12 @@ export function PaymentMethodsPanel({
               <span className="flex-1">
                 <span className="font-medium">{method.name}</span>
                 {method.isDefault && (
-                  <span className="ml-2 rounded bg-gray-200 px-1.5 py-0.5 text-xs text-gray-600">
+                  <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
                     Predeterminado
                   </span>
                 )}
                 {method.lines.map((line, i) => (
-                  <span key={i} className="block text-xs text-gray-600">
+                  <span key={i} className="block text-xs text-zinc-500">
                     {line.label}: {line.value}
                   </span>
                 ))}
@@ -163,7 +163,7 @@ export function PaymentMethodsPanel({
         ))}
 
         {draft ? (
-          <div className="space-y-2 rounded border bg-white p-3">
+          <div className="space-y-2 rounded-xl border border-zinc-200 bg-white p-4">
             <h4 className="text-sm font-semibold">
               {draft.id ? "Editar método de pago" : "Nuevo método de pago"}
             </h4>
