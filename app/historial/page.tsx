@@ -35,6 +35,8 @@ type InvoiceRecord = {
   clientName: string
   notes: string
   paymentMethod: string
+  emailedTo?: string
+  emailedAt?: string | null
   fileType: "pdf" | "xlsx"
   fileName: string
   uploadedAt: string
@@ -424,6 +426,11 @@ export default function HistorialPage() {
                       {r.total ? `${formatEsNumberString(r.total)} EUR` : "—"}
                       {r.paymentMethod && (
                         <div className="text-xs text-zinc-500">{r.paymentMethod}</div>
+                      )}
+                      {r.emailedTo && (
+                        <div className="text-xs text-emerald-700" title={r.emailedAt ?? undefined}>
+                          Enviada a {r.emailedTo}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="text-right space-x-2">

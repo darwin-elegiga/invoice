@@ -10,6 +10,7 @@ import { AppHeader } from "@/app/components/AppHeader"
 import { InvoicePreview } from "./components/InvoicePreview"
 import { PaymentMethodsPanel, type PaymentMethod } from "./components/PaymentMethodsPanel"
 import { TimesheetEditor, formatHours, type CatalogEntry } from "./components/TimesheetEditor"
+import { EmailPanel } from "./components/EmailPanel"
 import {
   buildDefaultMonth,
   timesheetFileName,
@@ -43,10 +44,10 @@ const profileText = (p: Profile) => ({
   clientAddress: p.address,
 })
 
-type ExportStatus =
-  | { kind: "idle" | "working" }
-  | { kind: "done"; archived: boolean }
-  | { kind: "error"; message: string }
+type DownloadStatus = { kind: "idle" | "working" | "done" } | { kind: "error"; message: string }
+
+// Generated invoice + hours files, archived once in the history
+type PreparedFiles = { files: File[]; archived: boolean }
 
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob)
@@ -112,8 +113,16 @@ export default function InvoicePage() {
   const [paymentMethodId, setPaymentMethodId] = useState<number | null>(null)
   const selectedPaymentMethod = paymentMethods.find((m) => m.id === paymentMethodId) ?? null
 
-  const [exportStatus, setExportStatus] = useState<ExportStatus>({ kind: "idle" })
+  const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>({ kind: "idle" })
   const [subjectCopied, setSubjectCopied] = useState(false)
+  // Both actions (email, download) share one generated set of files; any
+  // change to the sheet, month or payment method invalidates it
+  const [prepared, setPrepared] = useState<PreparedFiles | null>(null)
+  const resetPrepared = () => {
+    setPrepared(null)
+    setDownloadStatus({ kind: "idle" })
+  }
+  useEffect(resetPrepared, [paymentMethodId])
 
   const loadCatalog = () =>
     fetch("/api/catalog")
@@ -143,7 +152,7 @@ export default function InvoicePage() {
         setSheet(Array.isArray(data) ? data.find((m) => m.month === month) ?? null : null)
         setDirty(false)
         setSaveStatus("idle")
-        setExportStatus({ kind: "idle" })
+        resetPrepared()
       })
       .catch(() => !cancelled && setSheet(null))
       .finally(() => !cancelled && setLoading(false))
@@ -177,7 +186,7 @@ export default function InvoicePage() {
     setSheet(next)
     setDirty(true)
     setSaveStatus("idle")
-    setExportStatus({ kind: "idle" })
+    resetPrepared()
   }
 
   const createSheet = async () =>
@@ -217,43 +226,53 @@ export default function InvoicePage() {
     return res.ok
   }
 
-  const exportAll = async () => {
-    if (!sheet) return
+  /** Generates the PDF and the Excel (once) and archives them in the history. */
+  const prepareFiles = async (): Promise<File[] | null> => {
+    if (prepared) return prepared.files
+    if (!sheet) return null
     if (hours <= 0 || lines.length === 0) {
       const missing = [hours <= 0 && "horas", lines.length === 0 && "proyectos"].filter(Boolean).join(" ni ")
-      if (!window.confirm(`El parte no tiene ${missing}. ¿Exportar igualmente?`)) return
+      if (!window.confirm(`El parte no tiene ${missing}. ¿Continuar igualmente?`)) return null
     }
-    setExportStatus({ kind: "working" })
+    if (!(await saveSheet())) throw new Error("no se pudo guardar el parte")
+
+    const pdf = await renderInvoicePdf()
+    if (!pdf) throw new Error("no se encontró la vista previa")
+    const pdfFile = new File([pdf.output("blob")], pdfName, { type: "application/pdf" })
+
+    const xlsxRes = await fetch(`/api/timesheets/xlsx?year=${year}&month=${month}`)
+    if (!xlsxRes.ok) throw new Error("no se pudo generar el Excel")
+    const xlsxFile = new File([await xlsxRes.blob()], xlsxName, {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })
+
+    const archived = (
+      await Promise.all([
+        archive(pdfFile, {
+          total: formatEsNumber(total),
+          notes: `${formatHours(hours)} h × ${formatEsNumber(rate)} EUR`,
+          items: JSON.stringify(lines),
+          paymentMethod: selectedPaymentMethod?.name ?? "",
+        }),
+        // No project lines here, so the catalog isn't counted twice
+        archive(xlsxFile, { notes: "Parte de horas" }),
+      ])
+    ).every(Boolean)
+    loadCatalog()
+    const files = [pdfFile, xlsxFile]
+    setPrepared({ files, archived })
+    return files
+  }
+
+  const download = async () => {
+    setDownloadStatus({ kind: "working" })
     try {
-      if (!(await saveSheet())) throw new Error("no se pudo guardar el parte")
-
-      const pdf = await renderInvoicePdf()
-      if (!pdf) throw new Error("no se encontró la vista previa")
-      const pdfBlob = pdf.output("blob")
-
-      const xlsxRes = await fetch(`/api/timesheets/xlsx?year=${year}&month=${month}`)
-      if (!xlsxRes.ok) throw new Error("no se pudo generar el Excel")
-      const xlsxBlob = await xlsxRes.blob()
-
-      downloadBlob(pdfBlob, pdfName)
-      downloadBlob(xlsxBlob, xlsxName)
-
-      const archived = (
-        await Promise.all([
-          archive(new File([pdfBlob], pdfName, { type: "application/pdf" }), {
-            total: formatEsNumber(total),
-            notes: `${formatHours(hours)} h × ${formatEsNumber(rate)} EUR`,
-            items: JSON.stringify(lines),
-            paymentMethod: selectedPaymentMethod?.name ?? "",
-          }),
-          // No project lines here, so the catalog isn't counted twice
-          archive(new File([xlsxBlob], xlsxName), { notes: "Parte de horas" }),
-        ])
-      ).every(Boolean)
-      setExportStatus({ kind: "done", archived })
-      loadCatalog()
+      const files = await prepareFiles()
+      if (!files) return setDownloadStatus({ kind: "idle" })
+      files.forEach((f) => downloadBlob(f, f.name))
+      setDownloadStatus({ kind: "done" })
     } catch (err) {
-      setExportStatus({ kind: "error", message: err instanceof Error ? err.message : String(err) })
+      setDownloadStatus({ kind: "error", message: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -425,28 +444,44 @@ export default function InvoicePage() {
                   onMethodsChange={setPaymentMethods}
                 />
 
-                <section className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-8">
-                  <Button className="w-full" size="lg" onClick={exportAll} disabled={exportStatus.kind === "working"}>
-                    <Download className="mr-2 h-4 w-4" />
-                    {exportStatus.kind === "working" ? "Exportando…" : "Exportar PDF y Excel"}
-                  </Button>
-                  <ul className="space-y-1 text-xs text-zinc-500">
-                    <li>{pdfName}</li>
-                    <li>{xlsxName}</li>
-                  </ul>
-                  {exportStatus.kind === "done" && (
-                    <p className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                      <Check className="h-4 w-4" />
-                      {exportStatus.archived
-                        ? "Descargados y guardados en el historial."
-                        : "Descargados, pero no se pudieron guardar en el historial."}
+                <section className="space-y-5 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-8">
+                  <div>
+                    <h3 className="text-sm font-semibold">Enviar o descargar</h3>
+                    <p className="mt-1 text-xs text-zinc-500">Las dos son opcionales.</p>
+                  </div>
+
+                  <EmailPanel
+                    getFiles={prepareFiles}
+                    subject={emailSubject}
+                    monthLabel={monthName.toLowerCase()}
+                    invoiceNumber={invoiceNumber}
+                  />
+
+                  <div className="space-y-2 border-t border-zinc-100 pt-5">
+                    <Button variant="outline" className="w-full" onClick={download} disabled={downloadStatus.kind === "working"}>
+                      <Download className="mr-2 h-4 w-4" />
+                      {downloadStatus.kind === "working" ? "Preparando…" : "Descargar PDF y Excel"}
+                    </Button>
+                    <ul className="space-y-0.5 text-xs text-zinc-400">
+                      <li>{pdfName}</li>
+                      <li>{xlsxName}</li>
+                    </ul>
+                    {downloadStatus.kind === "error" && (
+                      <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                        No se pudo descargar: {downloadStatus.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {prepared && (
+                    <p className="flex items-center gap-2 text-xs text-zinc-500">
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      {prepared.archived
+                        ? "Factura y parte guardados en el historial."
+                        : "No se pudieron guardar en el historial."}
                     </p>
                   )}
-                  {exportStatus.kind === "error" && (
-                    <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                      No se pudo exportar: {exportStatus.message}
-                    </p>
-                  )}
+
                   <div className="flex flex-wrap items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 text-sm">
                     <span className="text-zinc-500">Asunto:</span>
                     <span className="font-medium">{emailSubject}</span>

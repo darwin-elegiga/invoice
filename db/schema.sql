@@ -100,3 +100,7 @@ create table if not exists timesheet_months (
   updated_at timestamptz not null default now(),
   primary key (year, month)
 );
+
+-- Optional email delivery of an exported invoice
+alter table invoices add column if not exists emailed_to text not null default '';
+alter table invoices add column if not exists emailed_at timestamptz;

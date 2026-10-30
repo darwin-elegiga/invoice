@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { AppHeader } from "../components/AppHeader"
 import { PIN_RULE, PinInput } from "../components/LockGate"
+import { DEFAULT_EMAIL_SETTINGS, withEmailDefaults, type EmailSettings } from "@/lib/email"
 import { PaymentMethodsPanel, type PaymentMethod } from "../components/PaymentMethodsPanel"
 import { DEFAULT_PROFILE, withProfileDefaults, type Profile } from "@/lib/profile"
 
@@ -137,8 +138,83 @@ function UnlockedSettings() {
         defaultOpen
       />
 
+      <EmailSettingsSection />
+
       <ChangePin />
     </div>
+  )
+}
+
+function EmailSettingsSection() {
+  const [settings, setSettings] = useState<EmailSettings>(DEFAULT_EMAIL_SETTINGS)
+  const [server, setServer] = useState<{ configured: boolean; from: string | null } | null>(null)
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+
+  useEffect(() => {
+    fetch("/api/email/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        setSettings(withEmailDefaults(data))
+        setServer({ configured: data.configured, from: data.from })
+      })
+      .catch(() => {})
+  }, [])
+
+  const update = (key: keyof EmailSettings) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setSettings({ ...settings, [key]: e.target.value })
+    setStatus("idle")
+  }
+
+  const save = async () => {
+    setStatus("saving")
+    const res = await fetch("/api/email/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    }).catch(() => null)
+    if (res?.status === 401) return onExpired()
+    setStatus(res?.ok ? "saved" : "error")
+  }
+
+  return (
+    <section className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-8">
+      <div>
+        <h2 className="text-sm font-semibold">Correo</h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Para enviar el PDF y el Excel tras exportar (opcional). Todo se puede cambiar en cada envío.
+        </p>
+      </div>
+      {server && (
+        <p className={`rounded-lg px-3 py-2 text-xs ${server.configured ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+          {server.configured
+            ? `Envío configurado desde ${server.from}.`
+            : "Envío sin configurar: faltan SMTP_USER y SMTP_PASSWORD en las variables de entorno."}
+        </p>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-zinc-500">Destinatario por defecto</span>
+          <input className={inputClass} placeholder="Opcional" value={settings.defaultTo} onChange={update("defaultTo")} />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-zinc-500">CC por defecto</span>
+          <input className={inputClass} placeholder="Opcional" value={settings.defaultCc} onChange={update("defaultCc")} />
+        </label>
+      </div>
+      <label className="block space-y-1.5">
+        <span className="text-xs font-medium text-zinc-500">Mensaje ({"{mes}"} se cambia por el mes facturado)</span>
+        <textarea rows={6} className={`${inputClass} resize-none`} value={settings.body} onChange={update("body")} />
+      </label>
+      <div className="flex items-center justify-end gap-3">
+        <span className="text-xs text-zinc-400">
+          {status === "saved" && "Guardado"}
+          {status === "error" && <span className="text-red-600">Revisa las direcciones y que el mensaje no esté vacío</span>}
+        </span>
+        <Button variant="outline" onClick={save} disabled={status === "saving"}>
+          {status === "saving" ? "Guardando…" : "Guardar correo"}
+        </Button>
+      </div>
+    </section>
   )
 }
 

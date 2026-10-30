@@ -35,6 +35,8 @@ export type InvoiceRecord = {
   blobPath: string
   uploadedAt: string
   items: InvoiceItem[]
+  emailedTo?: string
+  emailedAt?: string | null
 }
 
 export type CatalogEntry = {
@@ -81,6 +83,8 @@ const SELECT_INVOICES = `
     i.blob_url as "blobUrl",
     i.blob_path as "blobPath",
     to_char(i.uploaded_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "uploadedAt",
+    i.emailed_to as "emailedTo",
+    to_char(i.emailed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "emailedAt",
     coalesce(
       (select json_agg(json_build_object('project', it.project, 'client', it.client) order by it.position)
        from invoice_items it where it.invoice_id = i.id),
@@ -102,7 +106,7 @@ export async function getInvoice(id: string): Promise<InvoiceRecord | null> {
 // Inserts (or replaces, on import) an invoice with its items and records the
 // project/client pairs in the catalog, all in one transaction.
 export async function saveInvoice(
-  record: Omit<InvoiceRecord, "year" | "month">,
+  record: Omit<InvoiceRecord, "year" | "month" | "emailedTo" | "emailedAt">,
   { updateCatalog = true } = {},
 ) {
   const items = cleanItems(record.items)
@@ -152,6 +156,18 @@ function catalogUpsertQueries(item: InvoiceItem, countUse = true) {
 export async function registerCatalogItems(items: unknown) {
   const queries = cleanItems(items).flatMap((item) => catalogUpsertQueries(item, false))
   if (queries.length > 0) await sql.transaction(queries)
+}
+
+/** Notes on the latest PDF of that invoice number who it was emailed to. */
+export async function markInvoiceEmailed(invoiceNumber: string, recipients: string) {
+  await sql`
+    update invoices set emailed_to = ${recipients}, emailed_at = now()
+    where id = (
+      select id from invoices
+      where invoice_number = ${invoiceNumber} and file_type = 'pdf'
+      order by uploaded_at desc limit 1
+    )
+  `
 }
 
 export async function deleteInvoice(id: string): Promise<InvoiceRecord | null> {
