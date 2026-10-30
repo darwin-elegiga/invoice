@@ -311,7 +311,7 @@ export default function InvoicePage() {
         <AppHeader title="Facturas LYN" />
 
         {/* On wide screens each column scrolls on its own: steps left, PDF right */}
-        <div className="grid grid-cols-1 gap-8 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(26rem,1fr)_auto]">
+        <div className="grid grid-cols-1 gap-8 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(22rem,1fr)_min(860px,60vw)]">
           <div className="xl:-mr-2 xl:overflow-y-auto xl:pb-6 xl:pr-2">
             <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-1">
